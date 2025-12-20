@@ -1,0 +1,9 @@
+The goal of the coding side of this project is to be able to detect what a 
+chess board looks like from an image taken by a arduino and convert that into 
+a FENstring (standard for LiChess)
+Using that string it should be able to find the best move using stock fish Then 
+send that move back to the arduino which will send the required voltages to the various
+pieces.
+
+
+Nvidia already has a model that they trained to do this. That model can be used or our own could be trained
