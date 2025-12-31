@@ -208,6 +208,7 @@ __marimo__/
 
 # virtual environment
 .venv/
+.DS_Store
 
 # image detection data
-/Chessboard Image Detection/data
+# /Chessboard Image Detection/data
