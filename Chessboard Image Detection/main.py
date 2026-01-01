@@ -5,6 +5,7 @@
 
 import cv2
 import numpy as np
+import matplotlib.pyplot as plt
 
 image_path = "Chessboard Image Detection/data/input/test.jpg"
 img = cv2.imread(image_path)
@@ -35,21 +36,22 @@ def localize_chess_board(img):
         fnl = cv2.drawChessboardCorners(img, (7, 7), corners, ret)
         cv2.imshow("Chessboard with Corners", fnl)
 
-        """#might come in useful in the future
+        """#might come in useful in the future -- using this just taking average instead for error reduction
         inter_x_dist = corners[1].tolist()[0][0]-corners[0].tolist()[0][0]
         inter_y_dist = corners[8].tolist()[0][1]-corners[0].tolist()[0][1]"""
+
         return corners
 
     else:
         print("No Checkerboard Found")
         return
 
-corners = localize_chess_board(img) # corners gives 49 internal corners with (x,y) values in 1d array
-# print(corners)
+corners = localize_chess_board(img) 
 
-# 2. warp image to get perfect square
-def get_warped_board(img, corners):
-    grid = corners.reshape(7, 7, 2) # convert corners into a 3d array (aka grid[row][col]) with (x,y) inside
+# 2. extract squares
+def get_squares(img, corners):
+    # corners gives 49 internal corners with (x,y) values in 1d array, convert into a 3d array (aka grid[row][col]) with (x,y) inside
+    grid = corners.reshape(7, 7, 2)
 
     # calculating inter_x and inter_y dist here
     # we have 8 squares, 7 inner corners, and thus 6 intervals between corners
@@ -57,30 +59,54 @@ def get_warped_board(img, corners):
     x_dist = (grid[0,6]-grid[0,0])/6
     y_dist = (grid[6,0]-grid[0,0])/6
 
-    # find 4 outer corners
-    top_left = grid[0,0]-x_dist-y_dist
-    top_right = grid[0,6]+x_dist-y_dist
-    bottom_left = grid[6,0]-x_dist+y_dist
-    bottom_right = grid[6,6]+x_dist+y_dist
+    # create 9x9 array to include outer coordinates
+    board = np.zeros((9, 9, 2)) #empty array
+    top_left = grid[0,0]-x_dist-y_dist # start point
+    for row in range(9):
+        for col in range(9):
+            board[row, col] = top_left + (row * y_dist) + (col * x_dist)
 
-    # warp image to board
-    points = np.array([bottom_right, bottom_left, top_left, top_right], dtype="float32")
-    destination = np.array([[0,0],[800,0],[800,800],[0,800]], dtype="float32")
-    trans_matrix = cv2.getPerspectiveTransform(points, destination)
-    warped_board = cv2.warpPerspective(img, trans_matrix, (800,800)); # each square 100x100 px
+    # extract list of squares as images
+    squares = []
+    for row in range(8):
+        for col in range(8):
+            top_left = board[row, col]
+            bottom_right = board[row+1, col+1]
 
-    return warped_board
+            cropped_square = img[int(top_left[1]):int(bottom_right[1]), int(top_left[0]):int(bottom_right[0])]
+            squares.append(cropped_square)
 
-warped_board = get_warped_board(img, corners)
-cv2.imshow("warped board", warped_board)
+    return squares
 
-# 3. extract squares from warped board
-squares = []
-for row in range(8):
-    for col in range(8):
-        # Slice the warped image: [y_start:y_end, x_start:x_end]
-        square = warped_board[row*100:(row+1)*100, col*100:(col+1)*100]
-        squares.append(square)
+squares = get_squares(img, corners)
+
+# to display each square
+def display_squares(squares):
+    # create 8x8 figure
+    fig, axes = plt.subplots(8, 8, figsize=(10, 10))
+    
+    # chessboard labels for clarity
+    files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+    ranks = ['8', '7', '6', '5', '4', '3', '2', '1']
+    
+    for i in range(8):
+        for j in range(8):
+            index = i * 8 + j
+            ax = axes[i, j]
+            
+            # display cropped square
+            ax.imshow(squares[index])
+            
+            # add labels like 'a8', 'b8', etc.
+            ax.set_title(f"{files[j]}{ranks[i]}", fontsize=8)
+            
+            # hide axes
+            ax.axis('off')
+
+    plt.tight_layout()
+    plt.show()
+
+display_squares(squares)
 
 # 3. piece detection and classification
 cv2.waitKey(0)
