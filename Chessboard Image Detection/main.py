@@ -1,14 +1,10 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-from chess_logic import ChessSquare
+from chess_logic import ChessBoard
+import chess
 
-# everything here runs initially, detecting the board and applying the original states of pieces
-
-image_path = "Chessboard Image Detection/data/input/test.jpg"
-img = cv2.imread(image_path)
-
-# identify board
+# identify board -- initial
 def localize_chess_board(img):
     #binary mask
     lwr = np.array([0, 0, 143]) # lower bound for colours
@@ -29,6 +25,7 @@ def localize_chess_board(img):
                                             flags=cv2.CALIB_CB_ADAPTIVE_THRESH +
                                                 cv2.CALIB_CB_FAST_CHECK +
                                                 cv2.CALIB_CB_NORMALIZE_IMAGE)
+    
     if ret:
         # fnl = cv2.drawChessboardCorners(img, (7, 7), corners, ret)
         # cv2.imshow("Chessboard with Corners", fnl)
@@ -37,91 +34,51 @@ def localize_chess_board(img):
         inter_x_dist = corners[1].tolist()[0][0]-corners[0].tolist()[0][0]
         inter_y_dist = corners[8].tolist()[0][1]-corners[0].tolist()[0][1]"""
 
-        return corners
+         # corners gives 49 internal corners with (x,y) values in 1d array, convert into a 3d array (aka grid[row][col]) with (x,y) inside
+        grid = corners.reshape(7,7,2)
+
+        # calculating inter_x and inter_y dist here
+        # we have 8 squares, 7 inner corners, and thus 6 intervals between corners
+        # finding average to reduce error
+        x_dist = (grid[0,6]-grid[0,0])/6
+        y_dist = (grid[6,0]-grid[0,0])/6
+
+        # create 9x9 array to include outer coordinates
+        board = np.zeros((9, 9, 2)) #empty array
+        top_left = grid[0,0]-x_dist-y_dist # start point
+        for row in range(9):
+            for col in range(9):
+                board[row, col] = top_left + (row * y_dist) + (col * x_dist)
+
+        return board
 
     else:
         print("No Checkerboard Found")
         return
 
-# extract squares
-def get_squares(img, corners):
-    # corners gives 49 internal corners with (x,y) values in 1d array, convert into a 3d array (aka grid[row][col]) with (x,y) inside
-    grid = corners.reshape(7, 7, 2)
-
-    # calculating inter_x and inter_y dist here
-    # we have 8 squares, 7 inner corners, and thus 6 intervals between corners
-    # finding average to reduce error
-    x_dist = (grid[0,6]-grid[0,0])/6
-    y_dist = (grid[6,0]-grid[0,0])/6
-
-    # create 9x9 array to include outer coordinates
-    board = np.zeros((9, 9, 2)) #empty array
-    top_left = grid[0,0]-x_dist-y_dist # start point
-    for row in range(9):
-        for col in range(9):
-            board[row, col] = top_left + (row * y_dist) + (col * x_dist)
-
-    # create list of square object storing images and coordinates
-    squares = [[] for _ in range(8)]
+# runs initially, helping create first fenstring
+def applyInitialState(row, col, squares):
     for row in range(8):
         for col in range(8):
-            top_left = board[row, col]
-            bottom_right = board[row+1, col+1]
+            initial_row = ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r']
 
-            cropped_square = img[int(top_left[1]):int(bottom_right[1]), int(top_left[0]):int(bottom_right[0])]
-            square_object = ChessSquare(cropped_square, row, col)
+            # apply colours and occupied values to pawns
+            if row == 0 or row == 1:
+                squares[row][col].colour = 1
+                squares[row][col].occupied = True
+            if row == 6 or row == 7:
+                squares[row][col].colour = 0
+                squares[row][col].occupied = True
 
-            applyInitialState(row, col, square_object)
+            # apply piece values to pawns
+            if row == 1 or row == 6:
+                squares[row][col].piece = 'p'
 
-            squares[row].append(square_object)
+            # apply piece values to other pieces
+            if row == 0 or row == 7:
+                squares[row][col].piece = initial_row[col]
 
-    return squares
-
-def applyInitialState(row, col, square_object):
-    initial_row = ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r']
-
-    # apply colours and occupied values to pawns
-    if row == 0 or row == 1:
-        square_object.colour = 1
-        square_object.occupied = True
-    if row == 6 or row == 7:
-        square_object.colour = 0
-        square_object.occupied = True
-
-    # apply piece values to pawns
-    if row == 1 or row == 6:
-        square_object.piece = 'p'
-
-    # apply piece values to other pieces
-    if row == 0 or row == 7:
-        square_object.piece = initial_row[col]
-
-def boardToFEN(board):
-    fen = ""
-
-    for i in range(8):
-        empty_count = 0
-        for j in range(8):
-            char = board[i][j].getFENValue()
-            
-            if char == 0:
-                empty_count+=1
-                print("running", empty_count)
-            elif empty_count > 0:
-                fen+=str(empty_count)
-                empty_count = 0
-            else:
-                fen+=str(char)
-
-            if empty_count == 8:
-                fen+=str(empty_count)
-
-        if i!=7:
-            fen+="/"
-    
-    return fen
-
-# display each square
+"""# display each square
 def display_squares(squares):
     # create 8x8 figure
     fig, axes = plt.subplots(8, 8, figsize=(7, 7))
@@ -145,10 +102,14 @@ def display_squares(squares):
             ax.axis('off')
 
     plt.tight_layout()
-    plt.show()
+    plt.show()"""
 
 if __name__ == "__main__":
-    corners = localize_chess_board(img) 
-    squares = get_squares(img, corners)
-    display_squares(squares)
-    print(boardToFEN(squares))
+    # initial operations
+    image_path = "Chessboard Image Detection/data/input/test.jpg"
+    img = cv2.imread(image_path)
+    boardCoord = localize_chess_board(img) 
+    chessBoard = ChessBoard(boardCoord)
+    chessBoard.updateBoard(img)
+    applyInitialState(chessBoard.board)
+    print(chessBoard.boardToFEN())
