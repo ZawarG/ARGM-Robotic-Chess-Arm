@@ -1,16 +1,14 @@
-# IMPORTANT NOTE
-# Since grid will not move during game unless smth weird happens, I can detect the grid coordinates once
-# Then I can crop into an isolated 8x8 grid
-# During each turn, check for a move and run the corresponding function to analyze
-
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+from chess_logic import ChessSquare
+
+# everything here runs initially, detecting the board and applying the original states of pieces
 
 image_path = "Chessboard Image Detection/data/input/test.jpg"
 img = cv2.imread(image_path)
-cv2.imshow("img", img)
 
+# identify board
 def localize_chess_board(img):
     #binary mask
     lwr = np.array([0, 0, 143]) # lower bound for colours
@@ -21,7 +19,6 @@ def localize_chess_board(img):
     #dilation morphology
     krn = cv2.getStructuringElement(cv2.MORPH_RECT, (50, 30))
     dlt = cv2.dilate(msk, krn, iterations=5)
-    cv2.imshow("dilation", dlt)
 
     #bit AND operation
     res = 255 - cv2.bitwise_and(dlt, msk)
@@ -33,8 +30,8 @@ def localize_chess_board(img):
                                                 cv2.CALIB_CB_FAST_CHECK +
                                                 cv2.CALIB_CB_NORMALIZE_IMAGE)
     if ret:
-        fnl = cv2.drawChessboardCorners(img, (7, 7), corners, ret)
-        cv2.imshow("Chessboard with Corners", fnl)
+        # fnl = cv2.drawChessboardCorners(img, (7, 7), corners, ret)
+        # cv2.imshow("Chessboard with Corners", fnl)
 
         """#might come in useful in the future -- using this just taking average instead for error reduction
         inter_x_dist = corners[1].tolist()[0][0]-corners[0].tolist()[0][0]
@@ -46,9 +43,7 @@ def localize_chess_board(img):
         print("No Checkerboard Found")
         return
 
-corners = localize_chess_board(img) 
-
-# 2. extract squares
+# extract squares
 def get_squares(img, corners):
     # corners gives 49 internal corners with (x,y) values in 1d array, convert into a 3d array (aka grid[row][col]) with (x,y) inside
     grid = corners.reshape(7, 7, 2)
@@ -66,24 +61,70 @@ def get_squares(img, corners):
         for col in range(9):
             board[row, col] = top_left + (row * y_dist) + (col * x_dist)
 
-    # extract list of squares as images
-    squares = []
+    # create list of square object storing images and coordinates
+    squares = [[] for _ in range(8)]
     for row in range(8):
         for col in range(8):
             top_left = board[row, col]
             bottom_right = board[row+1, col+1]
 
             cropped_square = img[int(top_left[1]):int(bottom_right[1]), int(top_left[0]):int(bottom_right[0])]
-            squares.append(cropped_square)
+            square_object = ChessSquare(cropped_square, row, col)
+
+            applyInitialState(row, col, square_object)
+
+            squares[row].append(square_object)
 
     return squares
 
-squares = get_squares(img, corners)
+def applyInitialState(row, col, square_object):
+    initial_row = ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r']
 
-# to display each square
+    # apply colours and occupied values to pawns
+    if row == 0 or row == 1:
+        square_object.colour = 1
+        square_object.occupied = True
+    if row == 6 or row == 7:
+        square_object.colour = 0
+        square_object.occupied = True
+
+    # apply piece values to pawns
+    if row == 1 or row == 6:
+        square_object.piece = 'p'
+
+    # apply piece values to other pieces
+    if row == 0 or row == 7:
+        square_object.piece = initial_row[col]
+
+def boardToFEN(board):
+    fen = ""
+
+    for i in range(8):
+        empty_count = 0
+        for j in range(8):
+            char = board[i][j].getFENValue()
+            
+            if char == 0:
+                empty_count+=1
+                print("running", empty_count)
+            elif empty_count > 0:
+                fen+=str(empty_count)
+                empty_count = 0
+            else:
+                fen+=str(char)
+
+            if empty_count == 8:
+                fen+=str(empty_count)
+
+        if i!=7:
+            fen+="/"
+    
+    return fen
+
+# display each square
 def display_squares(squares):
     # create 8x8 figure
-    fig, axes = plt.subplots(8, 8, figsize=(10, 10))
+    fig, axes = plt.subplots(8, 8, figsize=(7, 7))
     
     # chessboard labels for clarity
     files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
@@ -95,7 +136,7 @@ def display_squares(squares):
             ax = axes[i, j]
             
             # display cropped square
-            ax.imshow(squares[index])
+            ax.imshow(squares[i][j].image)
             
             # add labels like 'a8', 'b8', etc.
             ax.set_title(f"{files[j]}{ranks[i]}", fontsize=8)
@@ -106,8 +147,8 @@ def display_squares(squares):
     plt.tight_layout()
     plt.show()
 
-display_squares(squares)
-
-# 3. piece detection and classification
-cv2.waitKey(0)
-cv2.destroyAllWindows()
+if __name__ == "__main__":
+    corners = localize_chess_board(img) 
+    squares = get_squares(img, corners)
+    display_squares(squares)
+    print(boardToFEN(squares))
