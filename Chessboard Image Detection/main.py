@@ -1,7 +1,10 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-from chess_logic import ChessBoard
+from chess_board import ChessBoard
+from chess_square import ChessSquare
+
+import matplotlib.patches as patches
 
 # identify board -- initial
 def localizeChessBoard(img):
@@ -19,7 +22,7 @@ def localizeChessBoard(img):
     res = 255 - cv2.bitwise_and(dlt, msk)
 
     #cv2 find chessboard (finds a checkboard pattern)
-    res = np.uint8(res) # binary image, this is what will be split into squares for ease of vision detection logic (checking if a square is empty)
+    res = np.uint8(res) # this binary mask will be split into 64 images to use to check occupied squares
 
     ret, corners = cv2.findChessboardCorners(res, (7, 7),
                                             flags=cv2.CALIB_CB_ADAPTIVE_THRESH +
@@ -27,13 +30,6 @@ def localizeChessBoard(img):
                                                 cv2.CALIB_CB_NORMALIZE_IMAGE)
     
     if ret:
-        # fnl = cv2.drawChessboardCorners(img, (7, 7), corners, ret)
-        # cv2.imshow("Chessboard with Corners", fnl)
-
-        """#might come in useful in the future -- using this just taking average instead for error reduction
-        inter_x_dist = corners[1].tolist()[0][0]-corners[0].tolist()[0][0]
-        inter_y_dist = corners[8].tolist()[0][1]-corners[0].tolist()[0][1]"""
-
         # corners gives 49 internal corners with (x,y) values in 1d array, convert into a 3d array (aka grid[row][col]) with (x,y) inside
         grid = corners.reshape(7,7,2)
 
@@ -56,28 +52,6 @@ def localizeChessBoard(img):
         print("No Checkerboard Found")
         return
 
-# runs initially, helping create first fenstring
-# def applyInitialState(squares):
-#     for row in range(8):
-#         for col in range(8):
-#             initial_row = ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r']
-
-#             # apply colours and occupied values to pawns
-#             if row == 0 or row == 1:
-#                 squares[row][col].colour = 1
-#                 squares[row][col].occupied = True
-#             if row == 6 or row == 7:
-#                 squares[row][col].colour = 0
-#                 squares[row][col].occupied = True
-
-#             # apply piece values to pawns
-#             if row == 1 or row == 6:
-#                 squares[row][col].piece = 'p'
-
-#             # apply piece values to other pieces
-#             if row == 0 or row == 7:
-#                 squares[row][col].piece = initial_row[col]
-
 # display each square
 def displaySquares(squares):
     # create 8x8 figure
@@ -93,6 +67,19 @@ def displaySquares(squares):
             
             # display cropped square
             ax.imshow(squares[i][j].image)
+
+            # occupied
+            occupied = squares[i][j].checkOccupied()
+            color = 'red' if occupied else 'green'  # red = occupied, green = empty
+            rect = patches.Rectangle(
+                (0, 0),                       # top-left corner (x, y)
+                squares[i][j].image.shape[1], # width
+                squares[i][j].image.shape[0], # height
+                linewidth=5,
+                edgecolor=color,
+                facecolor='none'
+            )
+            ax.add_patch(rect)
             
             # add labels like 'a8', 'b8', etc.
             ax.set_title(f"{files[j]}{ranks[i]}", fontsize=8)
@@ -111,4 +98,3 @@ if __name__ == "__main__":
     chessBoard = ChessBoard(boardCoord)
     chessBoard.updateSquares(img_new)
     displaySquares(chessBoard.squares)
-    # applyInitialState(chessBoard.board)
