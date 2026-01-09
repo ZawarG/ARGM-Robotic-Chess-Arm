@@ -1,4 +1,5 @@
 from chess_square import ChessSquare
+import chess
 
 class ChessBoard:
     def __init__(self, coord):
@@ -6,24 +7,13 @@ class ChessBoard:
 
         # vision layer
         self.squares = [[None for _ in range(8)] for _ in range(8)] # create list of chesssquare objects storing images
-        
-        # current occupancy state
-        self.curr_occ = [[False for _ in range(8)] for _ in range(8)] # create list of characters storing the state of the square, e.g. 'P' for white pawn
+        self.prev_occ = [[False for _ in range(8)] for _ in range(8)] # previous move's square occupancy
+        self.initPrevOcc()
 
-        # previous occupancy state
-        self.prev_occ = [[False for _ in range(8)] for _ in range(8)]
-
-        # FEN related fields
-        self.currmov = "w" # starts with white and alternates at each turn
-        self.castle = "KQkq" # possibility to castle
-        self.enpass = "-" # possibility for en passant
-        self.halfmoves = 0 # moves since last capture / pawn advance
-        self.fullmoves = 1 # number of full moves, incremented after black's turn
-
-        # initialize start positions and vision squares
-        self.initStartPos()
+        # chess board
+        self.board = chess.Board()
     
-    # update images, used for processing (checking if the space is empty)
+    # update images for each square
     def updateSquares(self, img):
         for row in range(8):
             for col in range(8):
@@ -38,65 +28,26 @@ class ChessBoard:
                 else:
                     self.squares[row][col].image = cropped_square
 
-
-    def updateOccupancyCheckChanged(self):
-        self.curr_occ = [[False for _ in range(8)] for _ in range(8)]
+    # check if images (squares) are occupied with a piece or not, and return any changes made to the chess piece locations
+    def detectChanges(self):
+        curr_occ = [[self.squares[row][col].isOccupied() for col in range(8)] for row in range(8)]
         changed = []
         
         for row in range(8):
             for col in range(8):
-                self.curr_occ[row][col] = self.squares[row][col].is_occupied()
-
-                if self.curr_occ[row][col] != self.prev_occupancy[row][col]:
+                if curr_occ[row][col] != self.prev_occ[row][col]:
                     changed.append((row,col))
 
-        self.prev_occ = self.curr_occ
+        self.prev_occ = curr_occ
         return changed
-
-
-
+    
+    def toUCI(self, row, col):
+        file = "abcdefgh"[col]
+        rank = str(8-row)
+        return file + rank
 
     # apply initial chess state
-    def initStartPos(self):
-        for col in range(8):
-            for row in [0,1,6,7]:
+    def initPrevOcc(self):
+        for row in [0,1,6,7]:
+            for col in range(8):
                 self.prev_occ[row][col] = True
-        # initial_row = ['r','n','b','q','k','b','n','r']
-
-        # for col in range(8):
-        #     self.state[0][col] = initial_row[col]
-        #     self.state[1][col] = 'p'
-        #     self.state[6][col] = 'P'
-        #     self.state[7][col] = initial_row[col].upper()
-
-        # def boardToFEN(self):
-        # fen = ""
-
-        # # board position values in fenstring
-        # for i in range(8):
-        #     empty_count = 0
-        #     for j in range(8):
-        #         char = self.state[i][j]
-                
-        #         if char is None:
-        #             empty_count+=1
-        #         else:
-        #             if empty_count > 0:
-        #                 fen+=str(empty_count)
-        #                 empty_count = 0
-        #             fen+=str(char)
-
-        #     if empty_count > 0:
-        #         fen+=str(empty_count)
-
-        #     if i!=7:
-        #         fen+="/"
-        
-        # # other values in fenstring
-        # fen += (self.currmov + " " + 
-        #         self.castle + " " + 
-        #         self.enpass + " " + 
-        #         str(self.halfmoves) + " " + 
-        #         str(self.fullmoves))
-
-        # return fen
