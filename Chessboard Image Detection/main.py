@@ -69,7 +69,7 @@ def displaySquares(squares):
             ax.imshow(squares[i][j].image)
 
             # occupied
-            occupied = squares[i][j].checkOccupied()
+            occupied = squares[i][j].isOccupied()
             color = 'red' if occupied else 'green'  # red = occupied, green = empty
             rect = patches.Rectangle(
                 (0, 0),                       # top-left corner (x, y)
@@ -98,3 +98,7 @@ if __name__ == "__main__":
     chessBoard = ChessBoard(boardCoord)
     chessBoard.updateSquares(img_new)
     displaySquares(chessBoard.squares)
+
+    while True:
+        changes = chessBoard.detectChanges()
+        chessBoard.checkMoves(changes)

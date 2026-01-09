@@ -19,13 +19,13 @@ class ChessSquare: # responsibile for vision aspect
         else:
             return self.piece
         
-    def cropCenter(self, border_ratio = 0.2): # avoids error in checkoccupied since colours from adjacent squares may be showing
+    def cropCenter(self, border_ratio = 0.2): # avoids error in isOccupied since colours from adjacent squares may be showing
         height, width = self.image.shape
         b_height = int(height * border_ratio)
         b_width = int(width * border_ratio)
         return self.image[b_height:height-b_height, b_width:width-b_width]
 
-    def checkOccupied(self):
+    def isOccupied(self):
         thresh_ratio = 0.1
         center = self.cropCenter()
 
