@@ -7,7 +7,7 @@ from chess_square import ChessSquare
 import matplotlib.patches as patches
 
 # identify board -- initial
-def localizeChessBoard(img):
+def createMask(img):
     #binary mask
     lwr = np.array([0, 0, 143]) # lower bound for colours
     upr = np.array([179, 61, 252]) # upper bound for colours
@@ -23,6 +23,11 @@ def localizeChessBoard(img):
 
     #cv2 find chessboard (finds a checkboard pattern)
     res = np.uint8(res) # this binary mask will be split into 64 images to use to check occupied squares
+
+    return res
+
+def localizeChessBoard(img):
+    res = createMask(img)
 
     ret, corners = cv2.findChessboardCorners(res, (7, 7),
                                             flags=cv2.CALIB_CB_ADAPTIVE_THRESH +
@@ -50,7 +55,7 @@ def localizeChessBoard(img):
 
     else:
         print("No Checkerboard Found")
-        return
+        return None, res
 
 # display each square
 def displaySquares(squares):
@@ -91,14 +96,33 @@ def displaySquares(squares):
     plt.show()
 
 if __name__ == "__main__":
-    # initial operations
     image_path = "Chessboard Image Detection/data/input/test.jpg"
     img = cv2.imread(image_path)
-    boardCoord, img_new = localizeChessBoard(img) 
-    chessBoard = ChessBoard(boardCoord)
-    chessBoard.updateSquares(img_new)
-    displaySquares(chessBoard.squares)
+    """
+    # retrieve picture
+    cam = cv2.VideoCapture(0)
+    _, img = cam.read()
+    """
+    # initialization
+    boardCoord = None
+    while boardCoord is not None:
+        boardCoord, img_new = localizeChessBoard(img) # find location of board
+        if boardCoord is None:
+            continue
+        chessBoard = ChessBoard(boardCoord) # create chess board object
+        chessBoard.updateSquares(img_new) # crop images for chess board
 
+    # display for debugging
+    displaySquares(chessBoard.squares)
+    """
     while True:
-        changes = chessBoard.detectChanges()
-        chessBoard.checkMoves(changes)
+        exists, img = cam.read()
+        if not exists: break
+
+        # update visuals of chess board
+        img_new = createMask(img)
+        chessBoard.updateSquares(img_new)
+
+        # detect changes in board and update python-chess accordingly
+        chessBoard.checkIfStable()
+    """
