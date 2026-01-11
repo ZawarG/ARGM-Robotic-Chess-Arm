@@ -107,7 +107,13 @@ class ChessBoard:
                 possible_moves.append(move)
         
         if possible_moves:
-            move_to_play = possible_moves[0]  # if multiple, pick first legal match
+            for move in possible_moves:
+                if move.promotion == chess.QUEEN: # if pawn promotion, default to queen
+                    move_to_play = move
+                    break
+            else:
+                move_to_play = possible_moves[0] #otherwise, pick first legal match
+
             self.board.push(move_to_play)
             self.prev_occ = [row.copy() for row in self.curr_occ]
             return move_to_play
