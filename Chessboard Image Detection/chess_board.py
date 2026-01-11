@@ -1,5 +1,5 @@
 from chess_square import ChessSquare
-import chess
+import chess, chess.engine
 import time
 
 class ChessBoard:
@@ -14,11 +14,36 @@ class ChessBoard:
 
         # chess board
         self.board = chess.Board()
+        self.human_colour = chess.BLACK
+
+        # chess engine
+        self.engine = chess.engine.SimpleEngine.popen_uci("stockfish")
 
         # used to decide if a move has been made before detecting moves
         self.board_changed = False
         self.stable_frames = 0
         self.stable_thresh = 30 # 30 frames ~= 1 second
+
+        # for move determination
+        self.ignore_vision = False # ignore motion detection during robot's turn
+        self.robot_move_pending = False
+
+    # this is what the main function will run in its while loop
+    def update(self, img):
+        self.updateSquares(img)
+
+        # human move
+        move = self.checkIfStable()
+        if move:
+            print("human played:", move)
+            self.robot_move_pending = True
+            return
+        
+        # robot move
+        if self.board.turn != self.human_colour:
+            self.playRobotMove()
+            self.robot_move_pending = False
+            return
     
     # update images for each square
     def updateSquares(self, img):
@@ -54,51 +79,61 @@ class ChessBoard:
 
         if len(changed) == 0: # no move
             return None
-        elif len(changed) == 2: # regular move
-            sq1, sq2 = changed
+        
+        possible_moves = []
+        
+        for move in self.board.legal_moves:
+            from_row, from_col = 7 - (move.from_square // 8), move.from_square % 8
+            to_row, to_col = 7 - (move.to_square // 8), move.to_square % 8
+            
+            observed_squares = set(changed)
+            move_squares = {(from_row, from_col), (to_row, to_col)}
 
-            if self.prev_occ[sq1[0]][sq1[1]]: #if it is true, then this piece is the destination (previously full, now empty)
-                origin, dest, = sq1, sq2
-            else:
-                origin, dest = sq2, sq1
-        elif len(changed) == 4: # castling
-            origin, dest = None, None
-            for sq in changed:
-                if self.prev_occ[sq[0]][sq[1]] and not self.curr_occ[sq[0]][sq[1]]:
-                    origin = sq
-                if not self.prev_occ[sq[0]][sq[1]] and self.curr_occ[sq[0]][sq[1]]:
-                    dest = sq
-        elif len(changed) == 3: # en passant
-            # not sure
-            # also not sure how to detect pawn upgrades with what we are currently working with
-            print("Complex or unrecognizable move")
-            return None
-        else:
-            print("Complex or unrecognizable move")
-            return None
-
-        # convert to uci format for python-chess to update
-        uciMove = self.toUCI(*origin) + self.toUCI(*dest)
-        if uciMove in [m.uci() for m in self.board.legal_moves]:
-            self.board.push_uci(uciMove)
-            self.prev_occ = [row.copy() for row in self.curr_occ] # update prev_occ now that board is settled and logic is worked through
-        else:
-            print("Illegal or unrecognized move")
+            # en passent
+            if move.is_en_passant():
+                cap_row = from_row
+                cap_col = to_col
+                move_squares.add((cap_row, cap_col))
+            # castling
+            if move.is_castling():
+                if move.to_square > move.from_square:  # kingside
+                    move_squares.add((from_row, from_col + 3))  # rook origin
+                    move_squares.add((from_row, from_col + 1))  # rook destination
+                else:  # queenside
+                    move_squares.add((from_row, from_col - 4))  # rook origin
+                    move_squares.add((from_row, from_col - 1))  # rook destination
+            # could be promotion
+            if observed_squares == move_squares:
+                possible_moves.append(move)
+        
+        if possible_moves:
+            move_to_play = possible_moves[0]  # if multiple, pick first legal match
+            self.board.push(move_to_play)
+            self.prev_occ = [row.copy() for row in self.curr_occ]
+            return move_to_play
     
     # check if board has been stable long enough to consider a move complete
     def checkIfStable(self):
+        if self.ignore_vision:
+            return None
+        if self.board.turn != self.human_colour:
+            return None
+
         changed = self.detectChanges()
 
         if changed: # board is currently changing
             self.board_changed = True
             self.stable_frames = 0 # there have been no frames yet where the board is stable at this position
-        else:
+            return None
+        
+        if self.board_changed:
             # board is not changing
             self.stable_frames += 1
             if self.board_changed:  # previously detected a change
-                if self.stable_frames >= 30:
+                if self.stable_frames >= self.stable_thresh:
                     self.board_changed = False # board has been stable long enough
                     return self.detectMove() # detect and execute move
+        
         return None
     
     # convert (row, col) to file-rank
@@ -114,3 +149,31 @@ class ChessBoard:
             for col in range(8):
                 self.prev_occ[row][col] = True
                 self.curr_occ[row][col] = True
+
+    # robot decides what to play from stockfish engine
+    def playRobotMove(self):
+        if self.ignore_vision:
+            return
+        
+        self.ignore_vision = True
+
+        # ask engine for best move
+        result = self.engine.play(self.board, chess.engine.Limit(time=0.1))
+        move = result.move
+
+        print("Robot played:", move)
+
+        
+        self.board.push(move) # update chess state
+
+        # robot.execute(move) # physically move robot
+
+        # After robot finishes moving:
+        self.endRobotMove()
+
+    def endRobotMove(self):
+        self.prev_occ = [[sq.isOccupied() for sq in row] for row in self.squares]
+        self.curr_occ = [row.copy() for row in self.prev_occ]
+        self.board_changed = False
+        self.stable_frames = 0
+        self.ignore_vision = False
