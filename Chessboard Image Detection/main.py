@@ -98,31 +98,26 @@ def displaySquares(squares):
 if __name__ == "__main__":
     image_path = "Chessboard Image Detection/data/input/test.jpg"
     img = cv2.imread(image_path)
-    """
+    
     # retrieve picture
-    cam = cv2.VideoCapture(0)
-    _, img = cam.read()
-    """
+    # cam = cv2.VideoCapture(0)
+    
     # initialization
     boardCoord = None
-    while boardCoord is not None:
+    while boardCoord is None:
+        # _, img = cam.read()
         boardCoord, img_new = localizeChessBoard(img) # find location of board
-        if boardCoord is None:
-            continue
-        chessBoard = ChessBoard(boardCoord) # create chess board object
-        chessBoard.updateSquares(img_new) # crop images for chess board
+
+    chessBoard = ChessBoard(boardCoord) # create chess board object
+    chessBoard.updateSquares(img_new)
 
     # display for debugging
     displaySquares(chessBoard.squares)
-    """
-    while True:
-        exists, img = cam.read()
-        if not exists: break
+    
+    # while True:
+    #     exists, img = cam.read()
+    #     if not exists: break
 
-        # update visuals of chess board
-        img_new = createMask(img)
-        chessBoard.updateSquares(img_new)
-
-        # detect changes in board and update python-chess accordingly
-        chessBoard.checkIfStable()
-    """
+    #     # update chess board
+    #     img_new = createMask(img)
+    #     chessBoard.update(img_new)
