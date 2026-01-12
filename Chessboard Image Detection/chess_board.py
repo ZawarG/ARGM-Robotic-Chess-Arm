@@ -1,6 +1,13 @@
 from chess_square import ChessSquare
 import chess, chess.engine
-import time
+from enum import Enum, auto
+
+class GameState(Enum):
+    WAITING_FOR_HUMAN = auto()
+    HUMAN_MOVING = auto()
+    ROBOT_THINKING = auto()
+    ROBOT_MOVING = auto()
+
 
 class ChessBoard:
     def __init__(self, coord):
@@ -20,31 +27,75 @@ class ChessBoard:
         self.engine = chess.engine.SimpleEngine.popen_uci("stockfish")
 
         # used to decide if a move has been made before detecting moves
-        self.board_changed = False
+        # self.board_changed = False
         self.stable_frames = 0
         self.stable_thresh = 30 # 30 frames ~= 1 second
 
-        # for move determination
-        self.ignore_vision = False # ignore motion detection during robot's turn
-        self.robot_move_pending = False
+        # # for move determination
+        # self.ignore_vision = False # ignore motion detection during robot's turn
+        # self.robot_move_pending = False
 
-    # this is what the main function will run in its while loop
+        # game state
+        self.state = GameState.WAITING_FOR_HUMAN
+
+    # this is what the main function will run in its while loop, it is just dispatching FSM states
     def update(self, img):
         self.updateSquares(img)
 
-        # human move
-        move = self.checkIfStable()
-        if move:
-            print("human played:", move)
-            self.robot_move_pending = True
-            return
-        
-        # robot move
-        if self.board.turn != self.human_colour:
-            self.playRobotMove()
-            self.robot_move_pending = False
-            return
+        if self.state == GameState.WAITING_FOR_HUMAN:
+            self.__handleWaitingForHuman()
+
+        elif self.state == GameState.HUMAN_MOVING:
+            self.__handleHumanMoving()
+
+        elif self.state == GameState.ROBOT_THINKING:
+            self.__handleRobotThinking()
+
+        elif self.state == GameState.ROBOT_MOVING:
+            self.__handleRobotMoving()
+
+    # functions handling FSM
+    def __handleWaitingForHuman(self):
+        changed = self.detectChanges()
+        if changed:
+            self.state = GameState.HUMAN_MOVING
+            self.stable_frames = 0
     
+    def __handleHumanMoving(self):
+        changed = self.detectChanges()
+
+        if changed: # board is currently changing
+            self.stable_frames = 0 # there have been no frames yet where the board is stable at this position
+            return
+
+        self.stable_frames += 1
+        if self.stable_frames >= self.stable_thresh: # board has been stable long enough
+            move = self.detectMove()
+            if move:
+                print("Human played:", move)
+                self.state = GameState.ROBOT_THINKING
+    
+    def __handleRobotThinking(self):
+        result = self.engine.play(self.board, chess.engine.Limit(time=0.1))
+        self.pending_robot_move = result.move
+        self.state = GameState.ROBOT_MOVING
+
+    def __handleRobotMoving(self):
+        move = self.pending_robot_move
+        print("Robot played:", move)
+
+        self.board.push(move) # ask engine for best move
+
+        # robot.execute(move)
+
+        self.endRobotMove() # reset variables after robot finished moving
+        self.state = GameState.WAITING_FOR_HUMAN
+    
+    def endRobotMove(self):
+        self.prev_occ = [[sq.isOccupied() for sq in row] for row in self.squares]
+        self.curr_occ = [row.copy() for row in self.prev_occ]
+        self.stable_frames = 0
+
     # update images for each square
     def updateSquares(self, img):
         for row in range(8):
@@ -73,7 +124,7 @@ class ChessBoard:
         self.curr_occ = curr_occ # update current, but do not update previous until sure that the next move has been made
         return changed
     
-    # detect FSM changes and push to python-chess
+    # changed squares -> legal chess move
     def detectMove(self):
         changed = self.detectChanges()
 
@@ -117,36 +168,7 @@ class ChessBoard:
             self.board.push(move_to_play)
             self.prev_occ = [row.copy() for row in self.curr_occ]
             return move_to_play
-    
-    # check if board has been stable long enough to consider a move complete
-    def checkIfStable(self):
-        if self.ignore_vision:
-            return None
-        if self.board.turn != self.human_colour:
-            return None
 
-        changed = self.detectChanges()
-
-        if changed: # board is currently changing
-            self.board_changed = True
-            self.stable_frames = 0 # there have been no frames yet where the board is stable at this position
-            return None
-        
-        if self.board_changed:
-            # board is not changing
-            self.stable_frames += 1
-            if self.board_changed:  # previously detected a change
-                if self.stable_frames >= self.stable_thresh:
-                    self.board_changed = False # board has been stable long enough
-                    return self.detectMove() # detect and execute move
-        
-        return None
-    
-    # convert (row, col) to file-rank
-    def toUCI(self, row, col):
-        file = "abcdefgh"[col]
-        rank = str(8-row)
-        return file + rank
 
     # ------ this should not be needed, but i'm keeping it while working with a static image
     # apply initial chess state
@@ -155,31 +177,3 @@ class ChessBoard:
             for col in range(8):
                 self.prev_occ[row][col] = True
                 self.curr_occ[row][col] = True
-
-    # robot decides what to play from stockfish engine
-    def playRobotMove(self):
-        if self.ignore_vision:
-            return
-        
-        self.ignore_vision = True
-
-        # ask engine for best move
-        result = self.engine.play(self.board, chess.engine.Limit(time=0.1))
-        move = result.move
-
-        print("Robot played:", move)
-
-        
-        self.board.push(move) # update chess state
-
-        # robot.execute(move) # physically move robot
-
-        # After robot finishes moving:
-        self.endRobotMove()
-
-    def endRobotMove(self):
-        self.prev_occ = [[sq.isOccupied() for sq in row] for row in self.squares]
-        self.curr_occ = [row.copy() for row in self.prev_occ]
-        self.board_changed = False
-        self.stable_frames = 0
-        self.ignore_vision = False
