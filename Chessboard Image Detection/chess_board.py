@@ -1,13 +1,18 @@
 from chess_square import ChessSquare
 import chess, chess.engine
 from enum import Enum, auto
+import serial
+
+# Replace 'COM4' with your Arduino's port (e.g., '/dev/ttyUSB0')
+# Ensure the baud rate matches the one in your Arduino code
+arduino = serial.Serial(port='COM4', baudrate=115200, timeout=.1)
 
 class GameState(Enum):
     WAITING_FOR_HUMAN = auto()
     HUMAN_MOVING = auto()
     ROBOT_THINKING = auto()
     ROBOT_MOVING = auto()
-
+    GAME_OVER = auto()
 
 class ChessBoard:
     def __init__(self, coord):
@@ -21,10 +26,10 @@ class ChessBoard:
 
         # chess board
         self.board = chess.Board()
-        self.human_colour = chess.BLACK
+        self.human_colour = chess.WHITE
 
         # chess engine
-        self.engine = chess.engine.SimpleEngine.popen_uci("stockfish")
+        self.engine = chess.engine.SimpleEngine.popen_uci("/opt/homebrew/bin/stockfish")
 
         # used to decide if a move has been made before detecting moves
         # self.board_changed = False
@@ -54,10 +59,29 @@ class ChessBoard:
         elif self.state == GameState.ROBOT_MOVING:
             self.__handleRobotMoving()
 
+        elif self.state == GameState.GAME_OVER:
+            self.__handleGameOver()
+
     # functions handling FSM
+    def __handleGameOver(self):
+        outcome = self.board.outcome()
+
+        self.close()
+
+        if outcome.winner == True:
+            winner =  "Player"
+        elif outcome.winner == False:
+            winner =  "Robot"
+        else:
+            winner = "Draw"
+        
+        arduino.write(bytes('winner: ' + winner + '\n', 'utf-8')) 
+
+        return winner
+
     def __handleWaitingForHuman(self):
         changed = self.detectChanges()
-        if changed:
+        if len(changed) > 0:
             self.state = GameState.HUMAN_MOVING
             self.stable_frames = 0
     
@@ -70,13 +94,21 @@ class ChessBoard:
 
         self.stable_frames += 1
         if self.stable_frames >= self.stable_thresh: # board has been stable long enough
-            move = self.detectMove()
+            move = self.detectMove(changed)
+            self.board.push(move)
+            print(move)
             if move:
                 print("Human played:", move)
-                self.state = GameState.ROBOT_THINKING
+                if self.board.is_game_over(): # check for game over
+                    self.state = GameState.GAME_OVER
+                else:
+                    self.state = GameState.ROBOT_THINKING
     
     def __handleRobotThinking(self):
-        result = self.engine.play(self.board, chess.engine.Limit(time=0.1))
+        result = self.engine.play(
+            self.board, 
+            chess.engine.Limit(time=0.1)
+        )
         self.pending_robot_move = result.move
         self.state = GameState.ROBOT_MOVING
 
@@ -84,14 +116,19 @@ class ChessBoard:
         move = self.pending_robot_move
         print("Robot played:", move)
 
-        self.board.push(move) # ask engine for best move
+        self.board.push(move) # apply best move to board
 
-        # robot.execute(move)
+        self.makeMove(move) # tell robot to physically make move
 
         self.endRobotMove() # reset variables after robot finished moving
-        self.state = GameState.WAITING_FOR_HUMAN
+
+        if self.board.is_game_over(): # check for game over
+            self.state = GameState.GAME_OVER
+        else:
+            self.state = GameState.WAITING_FOR_HUMAN
     
     def endRobotMove(self):
+        self.pending_robot_move = None
         self.prev_occ = [[sq.isOccupied() for sq in row] for row in self.squares]
         self.curr_occ = [row.copy() for row in self.prev_occ]
         self.stable_frames = 0
@@ -125,9 +162,7 @@ class ChessBoard:
         return changed
     
     # changed squares -> legal chess move
-    def detectMove(self):
-        changed = self.detectChanges()
-
+    def detectMove(self, changed):
         if len(changed) == 0: # no move
             return None
         
@@ -165,10 +200,17 @@ class ChessBoard:
             else:
                 move_to_play = possible_moves[0] #otherwise, pick first legal match
 
-            self.board.push(move_to_play)
             self.prev_occ = [row.copy() for row in self.curr_occ]
             return move_to_play
+    
+    def makeMove(self, move):
+        from_square = move.from_uci()
+        to_square = move.to_uci()
 
+        arduino.write(bytes('from: ' + from_square + ' to: ' + to_square + '\n', 'utf-8')) 
+
+    def close(self):
+        self.engine.quit()
 
     # ------ this should not be needed, but i'm keeping it while working with a static image
     # apply initial chess state
