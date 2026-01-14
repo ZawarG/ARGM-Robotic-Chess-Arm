@@ -3,7 +3,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from chess_board import ChessBoard
 from chess_square import ChessSquare
-
 import matplotlib.patches as patches
 
 # identify board -- initial
@@ -23,6 +22,11 @@ def createMask(img):
 
     #cv2 find chessboard (finds a checkboard pattern)
     res = np.uint8(res) # this binary mask will be split into 64 images to use to check occupied squares
+
+    cv2.imshow('1', img)
+    cv2.imshow('2', res)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
     return res
 
@@ -104,9 +108,9 @@ if __name__ == "__main__":
     
     # initialization
     boardCoord = None
-    while boardCoord is None:
+    # while boardCoord is None:
         # _, img = cam.read()
-        boardCoord, img_new = localizeChessBoard(img) # find location of board
+    boardCoord, img_new = localizeChessBoard(img) # find location of board
 
     chessBoard = ChessBoard(boardCoord) # create chess board object
     chessBoard.updateSquares(img_new)
@@ -120,4 +124,7 @@ if __name__ == "__main__":
 
     #     # update chess board
     #     img_new = createMask(img)
-    #     chessBoard.update(img_new)
+    #     outcome = chessBoard.update(img_new)
+
+    #     if outcome: # save or return this somehow
+    #         break
