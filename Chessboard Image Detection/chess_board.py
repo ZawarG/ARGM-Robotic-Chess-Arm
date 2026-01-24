@@ -5,7 +5,7 @@ import serial
 
 # Replace 'COM4' with your Arduino's port (e.g., '/dev/ttyUSB0')
 # Ensure the baud rate matches the one in your Arduino code
-arduino = serial.Serial(port='COM4', baudrate=115200, timeout=.1)
+# arduino = serial.Serial(port='COM4', baudrate=115200, timeout=.1)
 
 class GameState(Enum):
     WAITING_FOR_HUMAN = auto()
@@ -75,7 +75,7 @@ class ChessBoard:
         else:
             winner = "Draw"
         
-        arduino.write(bytes('winner: ' + winner + '\n', 'utf-8')) 
+        # arduino.write(bytes('winner: ' + winner + '\n', 'utf-8')) 
 
         return winner
 
@@ -207,7 +207,7 @@ class ChessBoard:
         from_square = move.from_uci()
         to_square = move.to_uci()
 
-        arduino.write(bytes('from: ' + from_square + ' to: ' + to_square + '\n', 'utf-8')) 
+        # arduino.write(bytes('from: ' + from_square + ' to: ' + to_square + '\n', 'utf-8')) 
 
     def close(self):
         self.engine.quit()
