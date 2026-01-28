@@ -5,68 +5,10 @@ from chess_board import ChessBoard
 from chess_square import ChessSquare
 import matplotlib.patches as patches
 
-# identify board -- initial
-# def createMask(img):
-#     #binary mask
-#     lwr = np.array([0, 0, 143]) # lower bound for colours
-#     upr = np.array([179, 61, 252]) # upper bound for colours
-#     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV) 
-#     msk = cv2.inRange(hsv, lwr, upr) # colours within range conv erted to white, outside to black
-
-#     #dilation morphology
-#     krn = cv2.getStructuringElement(cv2.MORPH_RECT, (50, 30))
-#     dlt = cv2.dilate(msk, krn, iterations=5)
-
-#     #bit AND operation
-#     res = 255 - cv2.bitwise_and(dlt, msk)
-
-#     # krn = np.ones((5,5), np.uint8)
-#     # res = cv2.morphologyEx(msk, cv2.MORPH_CLOSE, krn)
-#     # res = cv2.morphologyEx(res, cv2.MORPH_OPEN, krn)
-
-#     #cv2 find chessboard (finds a checkboard pattern)
-#     res = np.uint8(res) # this binary mask will be split into 64 images to use to check occupied squares
-
-#     cv2.imshow('1', img)
-#     cv2.imshow('2', res)
-#     cv2.waitKey(0)
-#     cv2.destroyAllWindows()
-
-#     return res
-
-# def createMask(img):
-#     # convert to grayscale
-#     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-#     # bilateral filter to reduce noise
-#     filtered = cv2.bilateralFilter(gray, 9, 75, 75)
-
-#     # adaptive thresholding
-#     binary = cv2.adaptiveThreshold(
-#         filtered, 
-#         255, 
-#         cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-#         cv2.THRESH_BINARY,
-#         blockSize=99,  # large block size for square-level analysis
-#         C=10  # constant subtracted from weighted mean
-#     )
-
-#     # morphological operations
-#     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-#     binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=2)
-#     binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel, iterations=1)
-    
-#     cv2.imshow('Original', img)
-#     cv2.imshow('Filtered', filtered)
-#     cv2.imshow('Binary Mask', binary)
-#     cv2.waitKey(0)
-#     cv2.destroyAllWindows()
-
-#     return binary
-
 def createMask(img):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (9, 9), 0) # reduce wood grain
+    # blurred = cv2.GaussianBlur(gray, (7, 7), 0) # reduce wood grain
+    blurred = cv2.medianBlur(gray, 7)
     
     # create mask with manual thresholding (same as what was done with hsv)
     # lower_bound = 0      # lower value for white squares
@@ -75,12 +17,26 @@ def createMask(img):
     # res = 255 - msk  # invert
 
     # otsu thresholding (automatically finds value for threshold)
-    threshold_value, msk = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    res = msk
-    
+    otsu_th, msk = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    squares_msk = 255 - msk
+
+    # manual threshold to single out black border
+    border_msk = cv2.inRange(blurred, 0, 80)
+
+    # merge otsu and manual thresholds
+    res = np.ones_like(gray)*255 # white canvas
+    res[squares_msk == 255] = 0 # add in black parts of otsu mask
+    res[border_msk == 255] = 255 # add in black parts of squares mask
+
+    # morphology to clean up small noise
+    kernel = np.ones((5,5), np.uint8)
+    res = cv2.morphologyEx(res, cv2.MORPH_OPEN, kernel) # removes small white noise
+    res = cv2.morphologyEx(res, cv2.MORPH_CLOSE, kernel) # fills small black holes
+
     cv2.imshow('1', img)
     cv2.imshow('2', blurred)
-    cv2.imshow('3', res)
+    cv2.imshow('border', border_msk)
+    cv2.imshow('final', res)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
@@ -95,6 +51,11 @@ def localizeChessBoard(img):
                                                 cv2.CALIB_CB_NORMALIZE_IMAGE)
     
     if ret:
+        fnl = cv2.drawChessboardCorners(img, (7, 7), corners, ret)
+        cv2.imshow("Chessboard with Corners", fnl)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
         # corners gives 49 internal corners with (x,y) values in 1d array, convert into a 3d array (aka grid[row][col]) with (x,y) inside
         grid = corners.reshape(7,7,2)
 
@@ -156,7 +117,7 @@ def displaySquares(squares):
     plt.show()
 
 if __name__ == "__main__":
-    image_path = "Chessboard Image Detection/data/input/IMG_0369.jpg"
+    image_path = "Chessboard Image Detection/data/input/RenderedImage.jpeg"
     img = cv2.imread(image_path)
     
     # retrieve picture
