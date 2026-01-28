@@ -6,29 +6,81 @@ from chess_square import ChessSquare
 import matplotlib.patches as patches
 
 # identify board -- initial
+# def createMask(img):
+#     #binary mask
+#     lwr = np.array([0, 0, 143]) # lower bound for colours
+#     upr = np.array([179, 61, 252]) # upper bound for colours
+#     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV) 
+#     msk = cv2.inRange(hsv, lwr, upr) # colours within range conv erted to white, outside to black
+
+#     #dilation morphology
+#     krn = cv2.getStructuringElement(cv2.MORPH_RECT, (50, 30))
+#     dlt = cv2.dilate(msk, krn, iterations=5)
+
+#     #bit AND operation
+#     res = 255 - cv2.bitwise_and(dlt, msk)
+
+#     # krn = np.ones((5,5), np.uint8)
+#     # res = cv2.morphologyEx(msk, cv2.MORPH_CLOSE, krn)
+#     # res = cv2.morphologyEx(res, cv2.MORPH_OPEN, krn)
+
+#     #cv2 find chessboard (finds a checkboard pattern)
+#     res = np.uint8(res) # this binary mask will be split into 64 images to use to check occupied squares
+
+#     cv2.imshow('1', img)
+#     cv2.imshow('2', res)
+#     cv2.waitKey(0)
+#     cv2.destroyAllWindows()
+
+#     return res
+
+# def createMask(img):
+#     # convert to grayscale
+#     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+#     # bilateral filter to reduce noise
+#     filtered = cv2.bilateralFilter(gray, 9, 75, 75)
+
+#     # adaptive thresholding
+#     binary = cv2.adaptiveThreshold(
+#         filtered, 
+#         255, 
+#         cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+#         cv2.THRESH_BINARY,
+#         blockSize=99,  # large block size for square-level analysis
+#         C=10  # constant subtracted from weighted mean
+#     )
+
+#     # morphological operations
+#     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+#     binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=2)
+#     binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel, iterations=1)
+    
+#     cv2.imshow('Original', img)
+#     cv2.imshow('Filtered', filtered)
+#     cv2.imshow('Binary Mask', binary)
+#     cv2.waitKey(0)
+#     cv2.destroyAllWindows()
+
+#     return binary
+
 def createMask(img):
-    #binary mask
-    lwr = np.array([0, 0, 143]) # lower bound for colours
-    upr = np.array([179, 61, 252]) # upper bound for colours
-    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV) 
-    msk = cv2.inRange(hsv, lwr, upr) # colours within range conv erted to white, outside to black
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (9, 9), 0) # reduce wood grain
+    
+    # create mask with manual thresholding (same as what was done with hsv)
+    # lower_bound = 0      # lower value for white squares
+    # upper_bound = 130    # upper value for white squares
+    # msk = cv2.inRange(blurred, lower_bound, upper_bound)
+    # res = 255 - msk  # invert
 
-    #dilation morphology
-    krn = cv2.getStructuringElement(cv2.MORPH_RECT, (50, 30))
-    dlt = cv2.dilate(msk, krn, iterations=5)
-
-    #bit AND operation
-    res = 255 - cv2.bitwise_and(dlt, msk)
-
-    # krn = np.ones((5,5), np.uint8)
-    # res = cv2.morphologyEx(msk, cv2.MORPH_CLOSE, krn)
-    # res = cv2.morphologyEx(res, cv2.MORPH_OPEN, krn)
-
-    #cv2 find chessboard (finds a checkboard pattern)
-    res = np.uint8(res) # this binary mask will be split into 64 images to use to check occupied squares
-
+    # otsu thresholding (automatically finds value for threshold)
+    threshold_value, msk = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    res = msk
+    
     cv2.imshow('1', img)
-    cv2.imshow('2', res)
+    cv2.imshow('2', blurred)
+    cv2.imshow('3', res)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
@@ -104,7 +156,7 @@ def displaySquares(squares):
     plt.show()
 
 if __name__ == "__main__":
-    image_path = "Chessboard Image Detection/data/input/test.jpg"
+    image_path = "Chessboard Image Detection/data/input/IMG_0369.jpg"
     img = cv2.imread(image_path)
     
     # retrieve picture
