@@ -5,7 +5,6 @@ import matplotlib.patches as patches
 from chess_board import ChessBoard
 from chess_square import ChessSquare
 
-# 1.0 | 0.8 | -20 | 40 | 1.6
 def apply_adjustments(img, sat, con, bright, bp, shadow):
     # saturation
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
@@ -27,8 +26,9 @@ def apply_adjustments(img, sat, con, bright, bp, shadow):
     
     return cv2.LUT(img, table)
 
-# values found: 1.0 | 0.8 | -20 | 40 | 1.6
-"""def testimgsettings(img):
+# values found: 1.0 | 0.8 | -20 | 40 | 1.6, and
+# 2.0 | 0.8 | -20 | 40 | 1.6
+def testimgsettings(img):
     # definte ranges
     saturations = [1.0, 1.5, 2.0]
     contrasts = [0.8, 1.0, 1.3]
@@ -57,7 +57,7 @@ def apply_adjustments(img, sat, con, bright, bp, shadow):
                         # visualize board
                         cv2.imshow(".", adjusted)
 
-    cv2.destroyAllWindows()"""
+    cv2.destroyAllWindows()
 
 # def enhance_board(img):
     # brightness, contrast, saturation, black point, shadows from +2 to -2, with .25 increment
@@ -108,11 +108,11 @@ def createMask(img):
 
     # cv2.imshow('1', img)
     # cv2.imshow('2', blurred)
-    cv2.imshow('border', border_msk)
-    cv2.imshow('squares', squares_msk)
+    # cv2.imshow('border', border_msk)
+    # cv2.imshow('squares', squares_msk)
     cv2.imshow('final', res)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
 
     return res
 
@@ -194,6 +194,7 @@ if __name__ == "__main__":
     image_path = "Chessboard Image Detection/data/input/RenderedImage.jpeg"
     img = cv2.imread(image_path)
     
+    # testimgsettings(img)
     # retrieve picture
     # cam = cv2.VideoCapture(0)
     
@@ -201,6 +202,7 @@ if __name__ == "__main__":
     boardCoord = None
     # while boardCoord is None:
         # _, img = cam.read()
+    
     adjusted_img = apply_adjustments(img, 1.0, 0.8, -20, 40, 1.6) # adjust image filters for easier processing
     boardCoord, img_new = localizeChessBoard(adjusted_img) # find location of board
 
