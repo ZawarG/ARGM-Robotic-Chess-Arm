@@ -19,7 +19,7 @@ class ChessBoard:
         self.coord = coord # list of all positions of each square in board
 
         # vision layer
-        self.squares = [[None for _ in range(8)] for _ in range(8)] # create list of chesssquare objects storing images
+        self.squares = [[None for _ in range(8)] for _ in range(8)] # list of chesssquare objects storing images
         self.prev_occ = [[False for _ in range(8)] for _ in range(8)] # previous move's square occupancy
         self.curr_occ = [[False for _ in range(8)] for _ in range(8)] # current move's square occupancy
         self.initOcc()
