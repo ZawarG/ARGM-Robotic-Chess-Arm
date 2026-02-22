@@ -1,9 +1,12 @@
 import cv2
+import requests
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 from chess_board import ChessBoard
 from chess_square import ChessSquare
+
+# for visualization
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 
 def apply_adjustments(img, sat, con, bright, bp, shadow):
     # saturation
@@ -54,47 +57,24 @@ def testimgsettings(img):
                         else:
                             status = "Fail"
 
-                        # visualize board
-                        cv2.imshow(".", adjusted)
-
-    cv2.destroyAllWindows()
-
-# def enhance_board(img):
-    # brightness, contrast, saturation, black point, shadows from +2 to -2, with .25 increment
-
-    # # --- STEP 1: SATURATION ---
-    # hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    # h, s, v = cv2.split(hsv)
-    # s = cv2.multiply(s, saturation_scale)
-    # s = np.clip(s, 0, 255).astype(np.uint8)
-    # hsv = cv2.merge([h, s, v])
-    # img_saturated = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
-
-    # # --- STEP 2: CONTRAST (Alpha/Beta) ---
-    # # new_img = alpha * old_img + beta
-    # enhanced_img = cv2.convertScaleAbs(img_saturated, alpha=contrast_alpha, beta=brightness_beta)
-    
-    # return enhanced_img
+def test
 
 def createMask(img):
-    # img = enhance_board(img)
-
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     # blurred = cv2.GaussianBlur(gray, (7, 7), 0) # reduce wood grain
     blurred = cv2.medianBlur(gray, 7)
-    
-    # create mask with manual thresholding (same as what was done with hsv)
-    # lower_bound = 0      # lower value for white squares
-    # upper_bound = 130    # upper value for white squares
-    # msk = cv2.inRange(blurred, lower_bound, upper_bound)
-    # res = 255 - msk  # invert
 
     # otsu thresholding (automatically finds value for threshold)
-    otsu_th, msk = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    # otsu_th, msk = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    # squares_msk = 255 - msk
+
+    # manual threshold
+    manual_th = 97
+    _, msk = cv2.threshold(blurred, manual_th, 255, cv2.THRESH_BINARY)
     squares_msk = 255 - msk
 
     # manual threshold to single out black border
-    border_msk = cv2.inRange(blurred, 0, 7)
+    border_msk = cv2.inRange(blurred, 0, 8)
 
     # merge otsu and manual thresholds
     res = np.ones_like(gray)*255 # white canvas
@@ -108,11 +88,11 @@ def createMask(img):
 
     # cv2.imshow('1', img)
     # cv2.imshow('2', blurred)
-    # cv2.imshow('border', border_msk)
-    # cv2.imshow('squares', squares_msk)
+    cv2.imshow('border', border_msk)
+    cv2.imshow('squares', squares_msk)
     cv2.imshow('final', res)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
     return res
 
@@ -190,37 +170,65 @@ def displaySquares(squares):
     plt.tight_layout()
     plt.show()
 
-if __name__ == "__main__":
-    image_path = "Chessboard Image Detection/data/input/RenderedImage.jpeg"
+def runVideoCapture():
+    cam = cv2.VideoCapture(0)
+    
+    # find chessboard coordinates
+    board_coord = None
+    max_attempts = 300
+    attempts = 0
+
+    while board_coord is None and attempts < max_attempts:
+        ret, img = cam.read()
+        if not ret: continue # camera failed
+        
+        adjusted_img = apply_adjustments(img, 1.0, 0.8, -20, 40, 1.6) # adjust image filters for easier processing
+        board_coord, img_new = localizeChessBoard(adjusted_img) # find location of board
+        attempts+=1
+
+        cv2.imshow("Camera", img)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            return
+
+    # create chess board object with given coordinates
+    chess_board = ChessBoard(board_coord)
+    chess_board.updateSquares(img_new)
+
+    # display chess squares for debugging
+    displaySquares(chess_board.squares)
+    
+    # game loop, checks for changes in the board and runs until the game state is complete
+    while True:
+        exists, img = cam.read()
+        if not exists: break
+
+        # update chess board
+        img_new = createMask(img)
+        outcome = chess_board.update(img_new)
+
+        if outcome:
+            break
+
+def testCodeWithImage() :
+    image_path = "Chessboard Image Detection/data/input/fromvid.png"
     img = cv2.imread(image_path)
-    
+
     # testimgsettings(img)
-    # retrieve picture
-    # cam = cv2.VideoCapture(0)
-    
-    # initialization
-    boardCoord = None
-    # while boardCoord is None:
-        # _, img = cam.read()
-    
+
     adjusted_img = apply_adjustments(img, 1.0, 0.8, -20, 40, 1.6) # adjust image filters for easier processing
-    boardCoord, img_new = localizeChessBoard(adjusted_img) # find location of board
+    board_coord, img_new = localizeChessBoard(adjusted_img) # find location of board
 
-    if boardCoord is not None:
-
-        chessBoard = ChessBoard(boardCoord) # create chess board object
-        chessBoard.updateSquares(img_new)
+    if board_coord is not None:
+        chess_board = ChessBoard(board_coord) # create chess board object
+        chess_board.updateSquares(img_new)
 
         # display for debugging
-        displaySquares(chessBoard.squares)
-    
-    # while True:
-    #     exists, img = cam.read()
-    #     if not exists: break
+        displaySquares(chess_board.squares)
 
-    #     # update chess board
-    #     img_new = createMask(img)
-    #     outcome = chessBoard.update(img_new)
+if __name__ == "__main__":
+    USE_CAMERA = True
 
-    #     if outcome: # save or return this somehow
-    #         break
+    if USE_CAMERA:
+        runVideoCapture()
+    else: 
+        testCodeWithImage()
