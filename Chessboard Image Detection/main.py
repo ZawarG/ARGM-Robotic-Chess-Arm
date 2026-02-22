@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
 # Filter image
-def apply_adjustments(img, sat, con, bright, bp, shadow):
+def applyImageAdjustments(img, sat, con, bright, bp, shadow):
     # Saturation
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     h, s, v = cv2.split(hsv)
@@ -31,13 +31,22 @@ def apply_adjustments(img, sat, con, bright, bp, shadow):
     return cv2.LUT(img, table)
 
 # Find perfect image filter and threshold settings for board detection
-def testimgsettings(img):
+def determineImageSettings(img):
+    # Define how much to iterate by for filtration values
+    img_step = .2
+
     # Define ranges for image filtration
-    saturations = [1.0, 1.5, 2.0]
-    contrasts = [0.8, 1.0, 1.3]
-    brightnesses = [-20, 0, 20]
-    black_points = [0, 20, 40] # important for border
-    shadows = [0.8, 1.2, 1.6]
+    saturations = np.arange(1, 2, img_step)
+    contrasts = np.arange(.8, 2, img_step)
+    brightnesses = np.arange(-20, 20, 2)
+    black_points = np.arange(0, 40, 2)
+    shadows = np.arange(.8, 2, img_step)
+
+    # saturations = [1.0, 1.5, 2.0]
+    # contrasts = [0.8, 1.0, 1.3]
+    # brightnesses = [-20, 0, 20]
+    # black_points = [0, 20, 40] # important for border
+    # shadows = [0.8, 1.2, 1.6]
 
     # Define how much to iterate by for threshold values
     step = 16
@@ -63,7 +72,7 @@ def testimgsettings(img):
                     for shadow in shadows:
                         
                         # Apply image filters
-                        adjusted = apply_adjustments(img, sat, con, bright, bp, shadow)
+                        adjusted = applyImageAdjustments(img, sat, con, bright, bp, shadow)
 
                         # Iterate through all board threshold settings
                         for board_lower, board_upper in board_ranges:
@@ -73,15 +82,11 @@ def testimgsettings(img):
                                 mask = createMask(adjusted, board_lower, board_upper, border_lower, border_upper)
 
                                 # Attempt to detect board
-                                boardCoord, img_new = localizeChessBoard(img, mask)
+                                board_coord, img_new = localizeChessBoard(img, mask)
 
                                 # Return successful values
-                                if boardCoord is not None:
-                                    return (
-                                        sat, con, bright, bp, shadow,
-                                        board_lower, board_upper,
-                                        border_lower, border_upper
-                                    )
+                                if board_coord is not None:
+                                    return board_coord, img_new
     return None
 
 # Create binary masks -- one for square, one for board outline
@@ -133,7 +138,13 @@ def localizeChessBoard(img, mask):
         # Retrieve chess square corners as a 1d array of tuples (x,y) containing 49 values (internal corners)
         grid = corners.reshape(7,7,2)
 
-        # Convert chess square corners to a 3d array including the outer coordinates -- grid[row][col] with (x,y)
+        # Rotate grid until its orientation is correct (top-left square first)
+        count = 0
+        while (grid[0,0][1] > grid[6,0][1] or grid[0,0][0] > grid[0,6][0] or count<4):
+            grid = np.rot90(grid)
+            count+=1
+
+        # Convert chess square corners to a 3d array including the outer coordinates -- grid[row][col][x,y]
         # Calculate average distance between each square
         # We have 8 squares, 7 inner corners, and thus 6 intervals between corners
         x_dist = (grid[0,6]-grid[0,0])/6
@@ -155,37 +166,47 @@ def localizeChessBoard(img, mask):
 
 # Display each square
 def displaySquares(squares):
-    # create 8x8 figure
+    # Create 8x8 figure
     fig, axes = plt.subplots(8, 8, figsize=(7, 7))
     
-    # chessboard labels for clarity
+    # Chessboard labels for clarity
     files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
     ranks = ['8', '7', '6', '5', '4', '3', '2', '1']
     
     for i in range(8):
         for j in range(8):
             ax = axes[i, j]
+            img = squares[i][j].image
             
-            # display cropped square
-            ax.imshow(squares[i][j].image)
+            # Check if image exists
+            if img is None or img.size == 0:
+                print(f"Empty image at {i},{j}")
+                print(img.shape)
+            else:
+                ax.imshow(img)
+                
+            # Display cropped square
+            ax.imshow(img)
 
-            # occupied
+            # Check which square is occupied and display using coloured borders
             occupied = squares[i][j].isOccupied()
-            color = 'red' if occupied else 'green'  # red = occupied, green = empty
+            color = 'red' if occupied else 'green'
+
+            # Place all images on figure
             rect = patches.Rectangle(
-                (0, 0),                       # top-left corner (x, y)
-                squares[i][j].image.shape[1], # width
-                squares[i][j].image.shape[0], # height
+                (0, 0),                       # Top-left corner (x, y)
+                squares[i][j].image.shape[1], # Width
+                squares[i][j].image.shape[0], # Height
                 linewidth=5,
                 edgecolor=color,
                 facecolor='none'
             )
             ax.add_patch(rect)
             
-            # add labels like 'a8', 'b8', etc.
+            # Add labels like 'a8', 'b8', etc.
             ax.set_title(f"{files[j]}{ranks[i]}", fontsize=8)
             
-            # hide axes
+            # Hide axes
             ax.axis('off')
 
     plt.tight_layout()
@@ -207,14 +228,8 @@ def runVideoCapture():
 
         if not ret: continue # Camera failed
         
-        # Retrieve optimal adjustment values
-        sat, con, bright, bp, shadow, status, board_lower, board_upper, border_lower, border_upper = testimgsettings(img)
-        # Adjust image with given filter values
-        adjusted_img = apply_adjustments(img, sat, con, bright, bp, shadow, status)
-        # Create binary mask with given threshold values
-        mask = createMask(adjusted_img, board_lower, board_upper, border_lower, border_upper)
-        # Find location of board using mask
-        board_coord, img_new = localizeChessBoard(img, mask)
+        # Retrieve and apply optimal adjustment values
+        board_coord, img_new= determineImageSettings(img)
         
         # Increase attempt count
         attempts+=1
@@ -247,25 +262,21 @@ def testCodeWithImage() :
     image_path = "Chessboard Image Detection/data/input/fromvid.png"
     img = cv2.imread(image_path)
 
-    # Retrieve optimal adjustment values
-    sat, con, bright, bp, shadow, board_lower, board_upper, border_lower, border_upper = testimgsettings(img)
-    # Adjust image with given filter values
-    adjusted_img = apply_adjustments(img, sat, con, bright, bp, shadow)
-    # Create binary mask with given threshold values
-    mask = createMask(adjusted_img, board_lower, board_upper, border_lower, border_upper)
-    # Find location of board using mask
-    board_coord, img_new = localizeChessBoard(img, mask)
+    # Retrieve and apply optimal adjustment values
+    board_coord, img_new= determineImageSettings(img)
 
     print(board_coord)
+
     if board_coord is not None:
-        chess_board = ChessBoard(board_coord) # create chess board object
+        # Create chess board object
+        chess_board = ChessBoard(board_coord)
         chess_board.updateSquares(img_new)
 
         # display for debugging
         displaySquares(chess_board.squares)
 
 if __name__ == "__main__":
-    USE_CAMERA = False
+    USE_CAMERA = True
 
     if USE_CAMERA:
         runVideoCapture()
