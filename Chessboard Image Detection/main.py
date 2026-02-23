@@ -1,8 +1,8 @@
 import cv2
-import requests
 import numpy as np
 from chess_board import ChessBoard
-from chess_square import ChessSquare
+
+import csv
 
 # for visualization
 import matplotlib.pyplot as plt
@@ -31,7 +31,7 @@ def applyImageAdjustments(img, sat, con, bright, bp, shadow):
     return cv2.LUT(img, table)
 
 # Find perfect image filter and threshold settings for board detection
-def determineImageSettings(img):
+def determineImageSettings(img, attempts):
     # Define how much to iterate by for filtration values
     img_step = .2
 
@@ -84,9 +84,21 @@ def determineImageSettings(img):
                                 # Attempt to detect board
                                 board_coord, img_new = localizeChessBoard(img, mask)
 
+                                print(attempts)
+
                                 # Return successful values
                                 if board_coord is not None:
+                                    print('appending')
+                                    with open("Chessboard Image Detection/data/output/imagevalues.csv", 'a', newline='') as csvfile:
+                                        # Create a CSV writer object
+                                        csv_writer = csv.writer(csvfile)
+                                        
+                                        # Write all rows at once
+                                        csv_writer.writerow([board_lower, board_upper, border_lower, border_upper, sat, con, bright, bp, shadow])
                                     return board_coord, img_new
+                                    
+                                    # list.append([board_lower, board_upper, border_lower, border_upper, saturations, contrasts, brightnesses, black_points, shadows])
+    # return list
     return None
 
 # Create binary masks -- one for square, one for board outline
@@ -131,16 +143,17 @@ def localizeChessBoard(img, mask):
     if ret:
         # Detect and display chess board
         fnl = cv2.drawChessboardCorners(img, (7, 7), corners, ret)
-        cv2.imshow("Chessboard with Corners", fnl)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        # cv2.imshow("Chessboard with Corners", fnl)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+        print("found")
         
         # Retrieve chess square corners as a 1d array of tuples (x,y) containing 49 values (internal corners)
         grid = corners.reshape(7,7,2)
 
         # Rotate grid until its orientation is correct (top-left square first)
         count = 0
-        while (grid[0,0][1] > grid[6,0][1] or grid[0,0][0] > grid[0,6][0] or count<4):
+        while ((grid[0,0][1] > grid[6,0][1] or grid[0,0][0] > grid[0,6][0]) and count<4):
             grid = np.rot90(grid)
             count+=1
 
@@ -227,9 +240,15 @@ def runVideoCapture():
         ret, img = cam.read()
 
         if not ret: continue # Camera failed
+
+        cv2.imshow('img', img)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
         
         # Retrieve and apply optimal adjustment values
-        board_coord, img_new= determineImageSettings(img)
+        board_coord, img_new, board_lower, board_upper, border_lower, border_upper = determineImageSettings(img, attempts)
+        print(attempts)
+        print(board_coord)
         
         # Increase attempt count
         attempts+=1
@@ -249,36 +268,57 @@ def runVideoCapture():
     # Game loop: checks for changes in the board and runs until the game state is complete
     while True:
         exists, img = cam.read()
+
         if not exists: break
 
         # update chess board
-        img_new = createMask(img)
+        img_new = createMask(img, board_lower, board_upper, border_lower, border_upper)
         outcome = chess_board.update(img_new)
 
         if outcome:
             break
 
 def testCodeWithImage() :
-    image_path = "Chessboard Image Detection/data/input/fromvid.png"
-    img = cv2.imread(image_path)
+    with open("Chessboard Image Detection/data/output/imagevalues.csv", 'w', newline='') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=
+            ["Board Lower", 
+            "Board Upper", 
+            "Border Lower", 
+            "Border Upper", 
+            "Saturation", 
+            "Contrast", 
+            "Brightness", 
+            "Black Point", 
+            "Shadows"]
+        )
+        writer.writeheader()
 
-    # Retrieve and apply optimal adjustment values
-    board_coord, img_new= determineImageSettings(img)
+    for i in range(5605, 5612):
+        image_path = "Chessboard Image Detection/data/input/IMG_" + str(i) + ".jpeg"
+        img = cv2.imread(image_path)
 
-    print(board_coord)
+        # Retrieve and apply optimal adjustment values
+        board_coord, img_new = determineImageSettings(img, i)
 
-    if board_coord is not None:
-        # Create chess board object
-        chess_board = ChessBoard(board_coord)
-        chess_board.updateSquares(img_new)
+        # print(board_coord)
 
-        # display for debugging
-        displaySquares(chess_board.squares)
+        # if board_coord is not None:
+        #     # Create chess board object
+        #     chess_board = ChessBoard(board_coord)
+        #     chess_board.updateSquares(img_new)
+
+        #     # display for debugging
+        #     displaySquares(chess_board.squares)
 
 if __name__ == "__main__":
-    USE_CAMERA = True
+    USE_CAMERA = False
 
     if USE_CAMERA:
         runVideoCapture()
     else: 
         testCodeWithImage()
+
+# TODO:
+# a1, etc is always white
+# a2, etc is always black
+# make moves accordingly

@@ -21,7 +21,6 @@ class ChessBoard:
         # vision layer
         self.squares = [[None for _ in range(8)] for _ in range(8)] # list of chesssquare objects storing images
         self.prev_occ = [[False for _ in range(8)] for _ in range(8)] # previous move's square occupancy
-        self.curr_occ = [[False for _ in range(8)] for _ in range(8)] # current move's square occupancy
         self.initOcc()
 
         # chess board
@@ -31,14 +30,9 @@ class ChessBoard:
         # chess engine
         self.engine = chess.engine.SimpleEngine.popen_uci("/opt/homebrew/bin/stockfish")
 
-        # used to decide if a move has been made before detecting moves
-        # self.board_changed = False
+        # FSM variables
         self.stable_frames = 0
-        self.stable_thresh = 30 # 30 frames ~= 1 second
-
-        # # for move determination
-        # self.ignore_vision = False # ignore motion detection during robot's turn
-        # self.robot_move_pending = False
+        self.stable_thresh = 5 # 30 frames ~= 1 second
 
         # game state
         self.state = GameState.WAITING_FOR_HUMAN
@@ -62,7 +56,7 @@ class ChessBoard:
         elif self.state == GameState.GAME_OVER:
             self.__handleGameOver()
 
-    # functions handling FSM
+    # FSM handlers
     def __handleGameOver(self):
         outcome = self.board.outcome()
 
@@ -80,29 +74,73 @@ class ChessBoard:
         return winner
 
     def __handleWaitingForHuman(self):
-        changed = self.detectChanges()
+        changed = self.detectChanges() # Check if any square occupancy has changed
+
         if len(changed) > 0:
-            self.state = GameState.HUMAN_MOVING
+            # Track current/possible move
+            self.pending_changes = set(changed)
             self.stable_frames = 0
+            self.state = GameState.HUMAN_MOVING
+
+    # def __handleWaitingForHuman(self):
+    #     observed = self.getObservedOccupancy()
+
+    #     matching_moves = []
+
+    #     # Iterate through possible moves from the engine
+    #     # If the possible move matches the occupancy observed, then append it to a list
+    #     for move in self.board.legal_moves:
+    #         temp_board = self.board.copy()
+    #         temp_board.push(move)
+
+    #         expected = self.getBoardOccupancy(temp_board)
+
+    #         if observed == expected:
+    #             matching_moves.append(move)
+
+    #     # If there is only one possible move, we update the engine
+    #     if len(matching_moves) == 1:
+    #         move = matching_moves[0]
+    #         print("Human played:", move)
+    #         self.board.push(move)
+
+    #         if self.board.is_game_over():
+    #             self.state = GameState.GAME_OVER
+    #         else:
+    #             self.state = GameState.ROBOT_THINKING
     
     def __handleHumanMoving(self):
         changed = self.detectChanges()
 
         if changed: # board is currently changing
+            # keep collecting all changed squares while occupancy is unstable
+            self.pending_changes.update(changed)
             self.stable_frames = 0 # there have been no frames yet where the board is stable at this position
             return
 
+        # no changes this frame: potentially stable
         self.stable_frames += 1
-        if self.stable_frames >= self.stable_thresh: # board has been stable long enough
-            move = self.detectMove(changed)
+
+        if self.stable_frames < self.stable_thresh: 
+            return
+            
+        # board has been stable long enough
+        move = self.detectMove(list(self.pending_changes))
+
+        if move:
+            print("Human played:", move)
             self.board.push(move)
-            print(move)
-            if move:
-                print("Human played:", move)
-                if self.board.is_game_over(): # check for game over
-                    self.state = GameState.GAME_OVER
-                else:
-                    self.state = GameState.ROBOT_THINKING
+
+            if self.board.is_game_over(): # check for game over
+                self.state = GameState.GAME_OVER
+            else:
+                self.state = GameState.ROBOT_THINKING
+        else: 
+            # invalid move, it was likely due to hand moving or lighting glitch
+            self.state = GameState.WAITING_FOR_HUMAN
+
+        self.pending_changes.clear()
+        self.stable_frames = 0
     
     def __handleRobotThinking(self):
         result = self.engine.play(
@@ -211,6 +249,24 @@ class ChessBoard:
 
     def close(self):
         self.engine.quit()
+
+    # Retrieve occupancy from chess engine
+    def getEngineOcc(self):
+        occ = [[False for _ in range(8)] for _ in range(8)]
+        
+        for square in chess.SQUARES:
+            piece = self.board.piece_at(square)
+            if piece:
+                row = 7 - (square // 8)
+                col = square % 8
+                occ[row][col] = True
+                
+        return occ
+    
+    # Retrieve occupancy observed on real board
+    def getObservedOcc(self):
+        return [[self.squares[row][col].isOccupied() for col in range(8)]
+            for row in range(8)]
 
     # ------ this should not be needed, but i'm keeping it while working with a static image
     # apply initial chess state
