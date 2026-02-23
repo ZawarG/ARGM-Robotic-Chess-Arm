@@ -19,7 +19,6 @@ class ChessBoard:
 
         # vision layer
         self.squares = [[None for _ in range(8)] for _ in range(8)] # list of chesssquare objects storing images
-        self.initOcc()
 
         # chess board
         self.board = chess.Board()
@@ -29,14 +28,15 @@ class ChessBoard:
         self.engine = chess.engine.SimpleEngine.popen_uci("/opt/homebrew/bin/stockfish")
 
         # chess visualizer
-        self.vis = ChessVisualizer.ChessVisualizer()
+        self.vis = ChessVisualizer()
 
         # game state
         self.state = GameState.HUMAN_MOVING
 
     # dispatching FSM states
     def update(self, img):
-        self.updateSquares(img)
+        if img is not None:
+            self.updateSquares(img)
 
         if self.state == GameState.HUMAN_MOVING:
             self.__handleHumanMoving()
@@ -74,7 +74,7 @@ class ChessBoard:
 
         if move:
             print("Human played:", move)
-            self.vis.play_move(chess.Move.from_uci(move))
+            self.vis.play_move(move)
             self.vis.run()
             self.board.push(move)
 
@@ -135,12 +135,12 @@ class ChessBoard:
             move_squares = {(from_row, from_col), (to_row, to_col)}
 
             # en passent
-            if move.is_en_passant():
+            if self.board.is_en_passant(move):
                 cap_row = from_row
                 cap_col = to_col
                 move_squares.add((cap_row, cap_col))
             # castling
-            if move.is_castling():
+            if self.board.is_castling(move):
                 if move.to_square > move.from_square:  # kingside
                     move_squares.add((from_row, from_col + 3))  # rook origin
                     move_squares.add((from_row, from_col + 1))  # rook destination
@@ -187,7 +187,8 @@ class ChessBoard:
     
     # Retrieve occupancy observed on real board
     def getObservedOccupancy(self):
-        return [[self.squares[row][col].isOccupied() for col in range(8)] for row in range(8)]
+        # return [[self.squares[row][col].isOccupied() for col in range(8)] for row in range(8)]
+        return self.test_observed
     
     # Detect changes
     def getChangedSquares(self):
@@ -202,3 +203,29 @@ class ChessBoard:
                     changed.append((row, col))
 
         return changed
+    
+    # FOR TESTING ----
+    def setObservedFromBoard(self, board):
+        self.test_observed = [[False]*8 for _ in range(8)]
+        for square in chess.SQUARES:
+            piece = board.piece_at(square)
+            if piece:
+                row = 7 - (square // 8)
+                col = square % 8
+                self.test_observed[row][col] = True
+
+    
+
+cb = ChessBoard(coord=None)
+
+# Simulate initial board view
+cb.setObservedFromBoard(cb.board)
+
+# Simulate human playing e2e4
+test_board = cb.board.copy()
+test_board.push(chess.Move.from_uci("e2e4"))
+
+cb.setObservedFromBoard(test_board)
+
+# Run update
+cb.update(None)
