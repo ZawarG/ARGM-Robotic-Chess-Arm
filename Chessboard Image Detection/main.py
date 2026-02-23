@@ -275,7 +275,11 @@ def runVideoCapture():
         img_new = createMask(img, board_lower, board_upper, border_lower, border_upper)
         outcome = chess_board.update(img_new)
 
+        # update visuals
+        chess_board.vis.update()
+
         if outcome:
+            print("Game over! Winner:", outcome)
             break
 
 def testCodeWithImage() :
@@ -320,6 +324,10 @@ if __name__ == "__main__":
 
 # TODO:
 # a1, etc is always white
-# a2, etc is always black
+# a8, etc is always black
 # make moves accordingly
 # update outcome.winner accordingly
+# HOW TO IMPLEMENT:
+# Option 1: i need to know the perspective of the robot and which side of the screen it'll be on in relation
+#           from there, i can check if it is on the a8 side or a1 side
+# Option 2: tell the user to input

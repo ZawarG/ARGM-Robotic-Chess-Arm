@@ -24,9 +24,9 @@ symbol_to_name = {
 
 class ChessVisualizer:
 
-    def __init__(self):
+    def __init__(self, board):
 
-        self.board = chess.Board()
+        self.board = board
 
         pygame.init()
         self.screen = pygame.display.set_mode((board_pixels, board_pixels))
@@ -137,8 +137,6 @@ class ChessVisualizer:
                 rook_to
             )
 
-        self.board.push(move)
-
         pygame.time.delay(120)
 
     def update(self):
@@ -163,7 +161,7 @@ class ChessVisualizer:
 
 
 
-# vis = ChessVisualizer()
+# vis = ChessVisualizer(chess.Board())
 
 # vis.play_move(chess.Move.from_uci("e2e4"))
 # vis.play_move(chess.Move.from_uci("e7e5"))
