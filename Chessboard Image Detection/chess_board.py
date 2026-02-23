@@ -28,7 +28,7 @@ class ChessBoard:
         self.engine = chess.engine.SimpleEngine.popen_uci("/opt/homebrew/bin/stockfish")
 
         # chess visualizer
-        self.vis = ChessVisualizer()
+        self.vis = ChessVisualizer(self.board)
 
         # game state
         self.state = GameState.HUMAN_MOVING
@@ -45,7 +45,9 @@ class ChessBoard:
             self.__handleRobotMoving()
 
         elif self.state == GameState.GAME_OVER:
-            self.__handleGameOver()
+            return self.__handleGameOver()
+
+        return None
 
     # FSM handlers
     def __handleGameOver(self):
@@ -78,6 +80,9 @@ class ChessBoard:
             self.vis.run()
             self.board.push(move)
 
+            print("Engine FEN:", self.board.fen())
+            print("Visualizer FEN:", self.vis.board.fen())
+
             if self.board.is_game_over():
                 self.state = GameState.GAME_OVER
             else:
@@ -96,9 +101,13 @@ class ChessBoard:
         # Make move
         print("Robot played:", move)
         self.board.push(move)
-        self.vis.play_move(chess.Move.from_uci(move))
+        self.vis.play_move(move)
         self.vis.run()
-        self.makeMove(move) # tell robot to physically make move
+
+        print("Engine FEN:", self.board.fen())
+        print("Visualizer FEN:", self.vis.board.fen())
+
+        self.robotMakeMove(move) # tell robot to physically make move
 
         if self.board.is_game_over(): # check for game over
             self.state = GameState.GAME_OVER
@@ -163,9 +172,11 @@ class ChessBoard:
         else: 
             return None
     
-    def makeMove(self, move):
+    def robotMakeMove(self, move):
         from_square = move.from_uci()
         to_square = move.to_uci()
+
+        print("This is where robot would physically make the move")
 
         # arduino.write(bytes('from: ' + from_square + ' to: ' + to_square + '\n', 'utf-8')) 
 
@@ -215,17 +226,34 @@ class ChessBoard:
                 self.test_observed[row][col] = True
 
     
+# TESTING CODE
+"""
+Verify this loop works:
+Human moving ->
+Robot moving ->
+Human moving ->
+"""
+if __name__ == "__main__":
+    # Initialize chessboard
+    cb = ChessBoard(coord=None)
 
-cb = ChessBoard(coord=None)
+    # Force initial state
+    cb.state = GameState.HUMAN_MOVING
 
-# Simulate initial board view
-cb.setObservedFromBoard(cb.board)
+    # Simulate initial board view
+    cb.setObservedFromBoard(cb.board)
 
-# Simulate human playing e2e4
-test_board = cb.board.copy()
-test_board.push(chess.Move.from_uci("e2e4"))
+    # Simulate human playing e2e4
+    print("Simulating human move: e2e4")
+    test_board = cb.board.copy()
+    test_board.push(chess.Move.from_uci("e2e4"))
+    cb.setObservedFromBoard(test_board)
 
-cb.setObservedFromBoard(test_board)
+    # Run update
+    cb.update(None)
+    print("Current state after human move:", cb.state)
 
-# Run update
-cb.update(None)
+    # Run update again (robot should move)
+    cb.update(None)
+    print("Current state after robot move:", cb.state)
+    
