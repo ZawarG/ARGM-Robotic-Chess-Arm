@@ -1,4 +1,5 @@
 from chess_square import ChessSquare
+from visualize import ChessVisualizer
 import chess, chess.engine
 from enum import Enum, auto
 import serial
@@ -26,6 +27,9 @@ class ChessBoard:
 
         # chess engine
         self.engine = chess.engine.SimpleEngine.popen_uci("/opt/homebrew/bin/stockfish")
+
+        # chess visualizer
+        self.vis = ChessVisualizer.ChessVisualizer()
 
         # game state
         self.state = GameState.HUMAN_MOVING
@@ -70,6 +74,8 @@ class ChessBoard:
 
         if move:
             print("Human played:", move)
+            self.vis.play_move(chess.Move.from_uci(move))
+            self.vis.run()
             self.board.push(move)
 
             if self.board.is_game_over():
@@ -85,13 +91,13 @@ class ChessBoard:
             self.board, 
             chess.engine.Limit(time=0.1)
         )
-        
         move = result.move
         
+        # Make move
         print("Robot played:", move)
-
-        self.board.push(move) # apply best move to board
-
+        self.board.push(move)
+        self.vis.play_move(chess.Move.from_uci(move))
+        self.vis.run()
         self.makeMove(move) # tell robot to physically make move
 
         if self.board.is_game_over(): # check for game over
