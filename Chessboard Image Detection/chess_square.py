@@ -9,6 +9,10 @@ class ChessSquare: # responsibile for vision aspect
 
         # initialize piece info
         self.occupied = False # from image analysis
+
+        # frame history
+        self.history = []
+        self.history_size = 5
         
     def cropCenter(self, border_ratio = 0.2): # avoids error in isOccupied since colours from adjacent squares may be showing
         height, width = self.image.shape
@@ -19,10 +23,23 @@ class ChessSquare: # responsibile for vision aspect
     def isOccupied(self):
         center = self.cropCenter()
 
-        # # check for unique colours, if more than one, then there exists a piece
-        # thresh_ratio = 0.1
-        # unique_colours = np.unique(center)
-        # return len(unique_colours) > 1
-    
-        # standard deviation can look past the case where there is some noise
-        return center.std() > 15
+        # standard deviation threshold to detect if square is occupied
+        current_occ = center.std() > 15
+
+        # add to history
+        self.history.append(current_occ)
+
+        # keep only last 5 frames
+        if len(self.history) > self.history_size:
+            self.history.pop(0)
+
+        # take value that occurs more
+        if len(self.history) == self.history_size:
+            true_count = sum(self.history) # true = 1, false = 0
+            false_count = self.history_size - true_count
+            self.occupied = true_count > false_count # majority wins
+        else:
+            # not enough history yet
+            current_occ = self.occupied
+
+        return self.occupied
