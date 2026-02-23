@@ -322,3 +322,4 @@ if __name__ == "__main__":
 # a1, etc is always white
 # a2, etc is always black
 # make moves accordingly
+# update outcome.winner accordingly
