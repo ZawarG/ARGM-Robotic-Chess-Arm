@@ -8,9 +8,7 @@ import serial
 # arduino = serial.Serial(port='COM4', baudrate=115200, timeout=.1)
 
 class GameState(Enum):
-    WAITING_FOR_HUMAN = auto()
     HUMAN_MOVING = auto()
-    ROBOT_THINKING = auto()
     ROBOT_MOVING = auto()
     GAME_OVER = auto()
 
@@ -20,7 +18,6 @@ class ChessBoard:
 
         # vision layer
         self.squares = [[None for _ in range(8)] for _ in range(8)] # list of chesssquare objects storing images
-        self.prev_occ = [[False for _ in range(8)] for _ in range(8)] # previous move's square occupancy
         self.initOcc()
 
         # chess board
@@ -30,25 +27,15 @@ class ChessBoard:
         # chess engine
         self.engine = chess.engine.SimpleEngine.popen_uci("/opt/homebrew/bin/stockfish")
 
-        # FSM variables
-        self.stable_frames = 0
-        self.stable_thresh = 5 # 30 frames ~= 1 second
-
         # game state
-        self.state = GameState.WAITING_FOR_HUMAN
+        self.state = GameState.HUMAN_MOVING
 
-    # this is what the main function will run in its while loop, it is just dispatching FSM states
+    # dispatching FSM states
     def update(self, img):
         self.updateSquares(img)
 
-        if self.state == GameState.WAITING_FOR_HUMAN:
-            self.__handleWaitingForHuman()
-
-        elif self.state == GameState.HUMAN_MOVING:
+        if self.state == GameState.HUMAN_MOVING:
             self.__handleHumanMoving()
-
-        elif self.state == GameState.ROBOT_THINKING:
-            self.__handleRobotThinking()
 
         elif self.state == GameState.ROBOT_MOVING:
             self.__handleRobotMoving()
@@ -73,103 +60,44 @@ class ChessBoard:
 
         return winner
 
-    def __handleWaitingForHuman(self):
-        changed = self.detectChanges() # Check if any square occupancy has changed
-
-        if len(changed) > 0:
-            # Track current/possible move
-            self.pending_changes = set(changed)
-            self.stable_frames = 0
-            self.state = GameState.HUMAN_MOVING
-
-    # def __handleWaitingForHuman(self):
-    #     observed = self.getObservedOccupancy()
-
-    #     matching_moves = []
-
-    #     # Iterate through possible moves from the engine
-    #     # If the possible move matches the occupancy observed, then append it to a list
-    #     for move in self.board.legal_moves:
-    #         temp_board = self.board.copy()
-    #         temp_board.push(move)
-
-    #         expected = self.getBoardOccupancy(temp_board)
-
-    #         if observed == expected:
-    #             matching_moves.append(move)
-
-    #     # If there is only one possible move, we update the engine
-    #     if len(matching_moves) == 1:
-    #         move = matching_moves[0]
-    #         print("Human played:", move)
-    #         self.board.push(move)
-
-    #         if self.board.is_game_over():
-    #             self.state = GameState.GAME_OVER
-    #         else:
-    #             self.state = GameState.ROBOT_THINKING
-    
     def __handleHumanMoving(self):
-        changed = self.detectChanges()
+        changed = self.getChangedSquares()
 
-        if changed: # board is currently changing
-            # keep collecting all changed squares while occupancy is unstable
-            self.pending_changes.update(changed)
-            self.stable_frames = 0 # there have been no frames yet where the board is stable at this position
+        if not changed:
             return
 
-        # no changes this frame: potentially stable
-        self.stable_frames += 1
-
-        if self.stable_frames < self.stable_thresh: 
-            return
-            
-        # board has been stable long enough
-        move = self.detectMove(list(self.pending_changes))
+        move = self.detectMove(changed)
 
         if move:
             print("Human played:", move)
             self.board.push(move)
 
-            if self.board.is_game_over(): # check for game over
+            if self.board.is_game_over():
                 self.state = GameState.GAME_OVER
             else:
-                self.state = GameState.ROBOT_THINKING
-        else: 
-            # invalid move, it was likely due to hand moving or lighting glitch
-            self.state = GameState.WAITING_FOR_HUMAN
-
-        self.pending_changes.clear()
-        self.stable_frames = 0
+                self.state = GameState.ROBOT_MOVING
+        else:
+            # still mid move or noise
+            self.state = GameState.HUMAN_MOVING
     
-    def __handleRobotThinking(self):
+    def __handleRobotMoving(self):
         result = self.engine.play(
             self.board, 
             chess.engine.Limit(time=0.1)
         )
-        self.pending_robot_move = result.move
-        self.state = GameState.ROBOT_MOVING
-
-    def __handleRobotMoving(self):
-        move = self.pending_robot_move
+        
+        move = result.move
+        
         print("Robot played:", move)
 
         self.board.push(move) # apply best move to board
 
         self.makeMove(move) # tell robot to physically make move
 
-        self.endRobotMove() # reset variables after robot finished moving
-
         if self.board.is_game_over(): # check for game over
             self.state = GameState.GAME_OVER
         else:
             self.state = GameState.WAITING_FOR_HUMAN
-    
-    def endRobotMove(self):
-        self.pending_robot_move = None
-        self.prev_occ = [[sq.isOccupied() for sq in row] for row in self.squares]
-        self.curr_occ = [row.copy() for row in self.prev_occ]
-        self.stable_frames = 0
 
     # update images for each square
     def updateSquares(self, img):
@@ -186,19 +114,6 @@ class ChessBoard:
                 else:
                     self.squares[row][col].image = cropped_square
 
-    # check if images (squares) are occupied with a piece or not, and return any changes made to the chess piece locations
-    def detectChanges(self):
-        curr_occ = [[self.squares[row][col].isOccupied() for col in range(8)] for row in range(8)]
-        changed = []
-        
-        for row in range(8):
-            for col in range(8):
-                if curr_occ[row][col] != self.prev_occ[row][col]:
-                    changed.append((row,col))
-
-        self.curr_occ = curr_occ # update current, but do not update previous until sure that the next move has been made
-        return changed
-    
     # changed squares -> legal chess move
     def detectMove(self, changed):
         if len(changed) == 0: # no move
@@ -238,8 +153,9 @@ class ChessBoard:
             else:
                 move_to_play = possible_moves[0] #otherwise, pick first legal match
 
-            self.prev_occ = [row.copy() for row in self.curr_occ]
             return move_to_play
+        else: 
+            return None
     
     def makeMove(self, move):
         from_square = move.from_uci()
@@ -251,7 +167,7 @@ class ChessBoard:
         self.engine.quit()
 
     # Retrieve occupancy from chess engine
-    def getEngineOcc(self):
+    def getEngineOccupancy(self):
         occ = [[False for _ in range(8)] for _ in range(8)]
         
         for square in chess.SQUARES:
@@ -264,14 +180,19 @@ class ChessBoard:
         return occ
     
     # Retrieve occupancy observed on real board
-    def getObservedOcc(self):
-        return [[self.squares[row][col].isOccupied() for col in range(8)]
-            for row in range(8)]
+    def getObservedOccupancy(self):
+        return [[self.squares[row][col].isOccupied() for col in range(8)] for row in range(8)]
+    
+    # Detect changes
+    def getChangedSquares(self):
+        observed = self.getObservedOccupancy()
+        engine_occ = self.getEngineOccupancy()
 
-    # ------ this should not be needed, but i'm keeping it while working with a static image
-    # apply initial chess state
-    def initOcc(self):
-        for row in [0,1,6,7]:
+        changed = []
+
+        for row in range(8):
             for col in range(8):
-                self.prev_occ[row][col] = True
-                self.curr_occ[row][col] = True
+                if observed[row][col] != engine_occ[row][col]:
+                    changed.append((row, col))
+
+        return changed
