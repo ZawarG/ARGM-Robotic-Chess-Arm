@@ -1,6 +1,5 @@
 import pygame
 import chess
-import chess.engine
 
 square_size = 80
 board_pixels = square_size * 8
@@ -38,7 +37,7 @@ class ChessVisualizer:
         # load images
         self.piece_images = {}
         for symbol, name in symbol_to_name.items():
-            img = pygame.image.load(f'Chessboard Image Detection/Chess_Game_Visualizer/images/{name}.png')
+            img = pygame.image.load(f'Chessboard Image Detection/data/game-visualizer-images/{name}.png')
             img = pygame.transform.scale(img, (square_size, square_size))
             self.piece_images[name] = img
 
@@ -163,14 +162,13 @@ class ChessVisualizer:
         pygame.quit()
 
 
-"""
-vis = ChessVisualizer()
 
-vis.play_move(chess.Move.from_uci("e2e4"))
-vis.play_move(chess.Move.from_uci("e7e5"))
-vis.play_move(chess.Move.from_uci("g1f3"))
-vis.play_move(chess.Move.from_uci("b8c6"))
+# vis = ChessVisualizer()
 
-vis.run()
+# vis.play_move(chess.Move.from_uci("e2e4"))
+# vis.play_move(chess.Move.from_uci("e7e5"))
+# vis.play_move(chess.Move.from_uci("g1f3"))
+# vis.play_move(chess.Move.from_uci("b8c6"))
 
-"""
+# vis.run()
+
