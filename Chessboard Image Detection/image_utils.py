@@ -25,8 +25,6 @@ def applyImageAdjustments(img, sat = 1.0, con = 0.8, bright = -20, bp = 40, shad
 
 # Create binary masks -- one for square, one for board outline
 def createMask(img, isManual=False):
-    img = applyImageAdjustments(img)
-    
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     blurred = cv2.medianBlur(gray, 7)
 
@@ -62,7 +60,14 @@ def createMask(img, isManual=False):
 
 # Detect location of chess board
 def localizeChessBoard(img):
-    mask = createMask(img)
+    img_n = applyImageAdjustments(img)
+    mask = createMask(img_n)
+
+    cv2.imshow("original", img)
+    cv2.imshow("adjusted", img_n)
+    cv2.imshow("mask", mask)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
     # Build in method to detect chess board from binary mask
     ret, corners = cv2.findChessboardCorners(

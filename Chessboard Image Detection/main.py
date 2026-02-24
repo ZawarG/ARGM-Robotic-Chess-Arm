@@ -8,7 +8,7 @@ def runVideoCapture():
     cam = cv2.VideoCapture(0)
     board_coord = None
 
-    # Run loop until board coordinates are found or until maximum attemps have been made
+    # Localization loop
     attempts = 0
     max_attempts = 300
     while board_coord is None and attempts < max_attempts:
@@ -26,51 +26,54 @@ def runVideoCapture():
         # TODO: ask the user to apply filters
         pass
 
-    # Create chess board object
+    # Chess board object initialization
     chess_board = ChessBoard(board_coord)
     if img_mask is not None: chess_board.updateSquares(img_mask)
 
     # Display chess squares for debugging
     displaySquares(chess_board.squares)
 
-    # Game loop: checks for changes in the board and runs until the game is over
+    # Game loop
+    print("Game start")
     running = True
-    while running and chess_board.vis.running:
+    while running:
+        if not chess_board.vis.handle_events(): break # check if visualizer is closed
+
         ret, img = cam.read()
         if not ret: break
+
+        # process vision layer
         img_mask = createMask(img)
 
-        outcome = chess_board.update(img_mask) # update fsm
+        # update fsm: logic, animation, drawing board all happens here
+        outcome = chess_board.update(img_mask)
         
-        if chess_board.vis.animating_move:
-            chess_board.vis.animate_move_by_frame()
-        else:
-            chess_board.vis.update()
-
+        # check for game end
         if outcome:
             print("Game over! Winner:", outcome)
             running = False
 
+    # clean up
     chess_board.vis.quit() 
     chess_board.close()
     cam.release()
 
 def testCodeWithImage() :
-    image_path = "Chessboard Image Detection/data/input/fromvid.png"
+    image_path = "Chessboard Image Detection/data/input/RenderedImage.jpeg"
     img = cv2.imread(image_path)
 
-    # Apply adjustments and retrieve image
     board_coord, img_mask = localizeChessBoard(img)
-
-    print(board_coord)
 
     if board_coord is not None:
         # Create chess board object
         chess_board = ChessBoard(board_coord)
         chess_board.updateSquares(img_mask)
 
-        # display for debugging
+        # Display for debugging
         displaySquares(chess_board.squares)
+        chess_board.close()
+    else: 
+        print("Unable to find board")
 
 if __name__ == "__main__":
     USE_CAMERA = False
