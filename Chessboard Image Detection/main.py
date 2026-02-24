@@ -35,19 +35,23 @@ def runVideoCapture():
 
     # Game loop: checks for changes in the board and runs until the game is over
     running = True
-    while running:
+    while running and chess_board.vis.running:
         ret, img = cam.read()
         if not ret: break
-
-        # update chess board
         img_mask = createMask(img)
-        outcome = chess_board.update(img_mask)
-        chess_board.vis.update()
+
+        outcome = chess_board.update(img_mask) # update fsm
+        
+        if chess_board.vis.animating_move:
+            chess_board.vis.animate_move_by_frame()
+        else:
+            chess_board.vis.update()
 
         if outcome:
             print("Game over! Winner:", outcome)
             running = False
-    
+
+    chess_board.vis.quit() 
     chess_board.close()
     cam.release()
 

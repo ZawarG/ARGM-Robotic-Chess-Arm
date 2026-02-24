@@ -11,6 +11,7 @@ import serial
 class GameState(Enum):
     HUMAN_MOVING = auto()
     ROBOT_MOVING = auto()
+    ANIMATING_MOVE = auto()
     GAME_OVER = auto()
 
 class ChessBoard:
@@ -29,6 +30,8 @@ class ChessBoard:
 
         # chess visualizer
         self.vis = ChessVisualizer(self.board)
+        self.pending_push_move = None
+        self.last_move_by_human = False
 
         # game state
         self.state = GameState.HUMAN_MOVING
@@ -36,11 +39,16 @@ class ChessBoard:
     # dispatching FSM states
     def update(self, img):
         if img is not None:
-            self.updateSquares(img)
+            self.updateSquares(img)  
+        
+        if self.state == GameState.ANIMATING_MOVE:
+            self.__handleAnimating()
+        else:
+            self.vis.update()
 
         if self.state == GameState.HUMAN_MOVING:
             self.__handleHumanMoving()
-
+            
         elif self.state == GameState.ROBOT_MOVING:
             self.__handleRobotMoving()
 
@@ -50,6 +58,21 @@ class ChessBoard:
         return None
 
     # FSM handlers
+    def __handleAnimating(self):
+        finished = self.vis.animate_move_by_frame() # returns true if move over
+        
+        if finished and self.pending_push_move:
+            # Push the move after animation
+            self.board.push(self.pending_push_move)
+            self.pending_push_move = None
+
+            # Go to next FSM state
+            if self.board.is_game_over():
+                self.state = GameState.GAME_OVER
+            else:
+                # switch between human and robot
+                self.state = GameState.ROBOT_MOVING if self.last_move_by_human else GameState.HUMAN_MOVING
+
     def __handleGameOver(self):
         outcome = self.board.outcome()
 
@@ -76,17 +99,15 @@ class ChessBoard:
 
         if move:
             print("Human played:", move)
-            self.vis.play_move(move)
-            self.vis.run()
-            self.board.push(move)
+            
+            piece = self.board.piece_at(move.from_square)
+            piece_symbol = piece.symbol()
 
-            print("Engine FEN:", self.board.fen())
-            print("Visualizer FEN:", self.vis.board.fen())
+            self.last_move_by_human = True
+            self.pending_push_move = move  # store the move to push after animation finishes
+            self.vis.start_animation(piece_symbol, move.from_square, move.to_square)
+            self.state = GameState.ANIMATING_MOVE 
 
-            if self.board.is_game_over():
-                self.state = GameState.GAME_OVER
-            else:
-                self.state = GameState.ROBOT_MOVING
         else:
             # still mid move or noise
             self.state = GameState.HUMAN_MOVING
@@ -100,19 +121,16 @@ class ChessBoard:
         
         # Make move
         print("Robot played:", move)
-        self.board.push(move)
-        self.vis.play_move(move)
-        self.vis.run()
-
-        print("Engine FEN:", self.board.fen())
-        print("Visualizer FEN:", self.vis.board.fen())
+        piece = self.board.piece_at(move.from_square)
+        piece_symbol = piece.symbol()
+        
+        self.last_move_by_human = False
+        self.pending_push_move = move  # store the move to push after animation finishes
+        self.vis.start_animation(piece_symbol, move.from_square, move.to_square)
 
         self.robotMakeMove(move) # tell robot to physically make move
 
-        if self.board.is_game_over(): # check for game over
-            self.state = GameState.GAME_OVER
-        else:
-            self.state = GameState.WAITING_FOR_HUMAN
+        self.state = GameState.ANIMATING_MOVE 
 
     # update images for each square
     def updateSquares(self, img):
@@ -169,12 +187,12 @@ class ChessBoard:
                 move_to_play = possible_moves[0] #otherwise, pick first legal match
 
             return move_to_play
-        else: 
-            return None
+        
+        return None
     
     def robotMakeMove(self, move):
-        from_square = move.from_uci()
-        to_square = move.to_uci()
+        from_square = move.from_square
+        to_square = move.to_square
 
         print("This is where robot would physically make the move")
 
@@ -225,6 +243,15 @@ class ChessBoard:
                 col = square % 8
                 self.test_observed[row][col] = True
 
+    def force_human_move(self, uci_move: str):
+        # Simulate a human move for testing purposes.
+        move = chess.Move.from_uci(uci_move)
+        if move in self.board.legal_moves:
+            # Update observed squares to simulate move
+            test_board = self.board.copy()
+            test_board.push(move)
+            self.setObservedFromBoard(test_board)
+            print(f"[TEST] Simulated human move: {uci_move}")
     
 # TESTING CODE
 """
@@ -234,26 +261,30 @@ Robot moving ->
 Human moving ->
 """
 if __name__ == "__main__":
-    # Initialize chessboard
+    test_human_moves = ["e2e4", "d7d5", "e4d5", "b8c6", "g1f3"]
+    move_idx = 0
     cb = ChessBoard(coord=None)
-
-    # Force initial state
-    cb.state = GameState.HUMAN_MOVING
-
-    # Simulate initial board view
     cb.setObservedFromBoard(cb.board)
 
-    # Simulate human playing e2e4
-    print("Simulating human move: e2e4")
-    test_board = cb.board.copy()
-    test_board.push(chess.Move.from_uci("e2e4"))
-    cb.setObservedFromBoard(test_board)
+    running = True
+    while running:
+        # Check if visualizer is still running
+        if not cb.vis.running:
+            break
 
-    # Run update
-    cb.update(None)
-    print("Current state after human move:", cb.state)
+        # Simulate human input for testing
+        if cb.state == GameState.HUMAN_MOVING and move_idx < len(test_human_moves):
+            # Slow down simulation so we can see it
+            cb.force_human_move(test_human_moves[move_idx])
+            move_idx += 1
 
-    # Run update again (robot should move)
-    cb.update(None)
-    print("Current state after robot move:", cb.state)
-    
+        # Update FSM
+        outcome = cb.update(None)
+
+        # Check for game over
+        if outcome:
+            print(f"Game Result: {outcome}")
+            running = False
+
+    cb.vis.quit()
+    cb.close()
