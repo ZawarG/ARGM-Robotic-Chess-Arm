@@ -28,6 +28,8 @@ class ChessVisualizer:
 
         self.board = board
 
+        self.animating_move = None
+
         pygame.init()
         self.screen = pygame.display.set_mode((board_pixels, board_pixels))
         pygame.display.set_caption("Chess Robot Visualizer")
@@ -109,9 +111,10 @@ class ChessVisualizer:
 
     def play_move(self, move):
 
-        if move not in self.board.legal_moves:
-            print("Illegal:", move)
-            return
+        # this is already checked in chess_board before calling play_move
+        # if move not in self.board.legal_moves:
+        #     print("Illegal:", move)
+        #     return
 
         piece = self.board.piece_at(move.from_square)
         piece_symbol = piece.symbol()
@@ -141,10 +144,7 @@ class ChessVisualizer:
 
     def update(self):
 
-        for event in pygame.event.get():
-
-            if event.type == pygame.QUIT:
-                self.running = False
+        self.handle_events() 
 
         self.draw_board()
 
@@ -159,7 +159,62 @@ class ChessVisualizer:
 
         pygame.quit()
 
+        # tells the engine to start animating for a total of total_frames
+    def start_animation(self, piece_symbol, start_sq, end_sq, total_frames = 20):
+        self.animating_move = (piece_symbol, start_sq, end_sq, 0, total_frames)
 
+    def animate_move_by_frame(self):
+        if self.animating_move is None: 
+            return True
+
+        piece_symbol, start_sq, end_sq, frame, total_frames = self.animating_move
+
+        print(frame)
+
+        # compute position
+        start_r = 7 - (start_sq // 8)
+        start_c = start_sq % 8
+
+        end_r = 7 - (end_sq // 8)
+        end_c = end_sq % 8
+
+        start_px = (start_c*square_size, start_r*square_size)
+        end_px = (end_c*square_size, end_r*square_size)
+
+        x = start_px[0] + (end_px[0]-start_px[0])*(frame/total_frames)
+        y = start_px[1] + (end_px[1]-start_px[1])*(frame/total_frames)
+
+        self.handle_events() 
+
+        self.draw_board(exclude_square=start_sq)
+
+        name = symbol_to_name[piece_symbol]
+
+        self.screen.blit(self.piece_images[name], (x,y))
+
+        pygame.display.flip()
+        self.clock.tick(60)
+
+        frame += 1
+        if frame >= total_frames:
+            self.animating_move = None
+            return True
+        else:
+            self.animating_move = (piece_symbol, start_sq, end_sq, frame, total_frames)
+            return False
+
+    def quit(self):
+        pygame.display.quit()
+        pygame.quit()
+
+    def handle_events(self):
+        # handle pygame quit
+        # return false if window close
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
+        return self.running
+    
 
 # vis = ChessVisualizer(chess.Board())
 
@@ -170,3 +225,45 @@ class ChessVisualizer:
 
 # vis.run()
 
+# testing
+if __name__ == "__main__":
+    # Initialize board
+    board = chess.Board()
+
+    # Initialize visualizer
+    vis = ChessVisualizer(board)
+
+    # Define some test moves
+    test_moves = [
+        chess.Move.from_uci("e2e4"),
+        chess.Move.from_uci("e7e5"),
+        chess.Move.from_uci("g1f3"),
+        chess.Move.from_uci("b8c6")
+    ]
+
+    current_move_index = 0
+    animating = False
+
+    running = True
+    while running and vis.running:
+        vis.handle_events()
+
+        if not animating and current_move_index < len(test_moves):
+            # Start animating next move
+            move = test_moves[current_move_index]
+            piece = board.piece_at(move.from_square)
+            vis.start_animation(piece.symbol(), move.from_square, move.to_square)
+            animating = True
+
+        if animating:
+            # Animate one frame
+            finished = vis.animate_move_by_frame()
+            if finished:
+                board.push(test_moves[current_move_index])
+                current_move_index += 1
+                animating = False
+
+        else:
+            vis.update()
+
+    pygame.quit()
