@@ -169,8 +169,6 @@ class ChessVisualizer:
 
         piece_symbol, start_sq, end_sq, frame, total_frames = self.animating_move
 
-        print(frame)
-
         # compute position
         start_r = 7 - (start_sq // 8)
         start_c = start_sq % 8
