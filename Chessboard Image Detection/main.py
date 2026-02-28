@@ -1,6 +1,6 @@
 import cv2
 from chess_board import ChessBoard
-from image_utils import createMask, localizeChessBoard
+from image_utils import run, createMask
 from debug_utils import displaySquares
 
 def runVideoCapture():
@@ -9,25 +9,16 @@ def runVideoCapture():
     board_coord = None
 
     # Localization loop
-    attempts = 0
-    max_attempts = 300
-    while board_coord is None and attempts < max_attempts:
+    while board_coord is None:
         # Read an image from the video stream
         ret, img = cam.read()
         if not ret: continue # Camera failed
         
         # Apply adjustments and retrieve image
-        board_coord, img_mask = localizeChessBoard(img)
-
-        # Increase attempt count
-        attempts+=1
-
-    if board_coord is None:
-        # TODO: ask the user to apply filters
-        pass
-
+        board_coord, img_mask = run(img)
+    
     # Chess board object initialization
-    chess_board = ChessBoard(board_coord)
+    if board_coord is not None: chess_board = ChessBoard(board_coord)
     if img_mask is not None: chess_board.updateSquares(img_mask)
 
     # Display chess squares for debugging
@@ -59,10 +50,21 @@ def runVideoCapture():
     cam.release()
 
 def testCodeWithImage() :
-    image_path = "Chessboard Image Detection/data/input/RenderedImage.jpeg"
+    image_path = "Chessboard Image Detection/data/input/fromvid.png"
     img = cv2.imread(image_path)
 
-    board_coord, img_mask = localizeChessBoard(img)
+    # img_n = applyImageAdjustments(img)
+    # mask = createMask(img_n)
+
+    # cv2.imshow("original", img)
+    # cv2.imshow("adjusted", img_n)
+    # cv2.imshow("mask", mask)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+
+    # board_coord, img_mask = localizeChessBoard(img, mask)
+
+    board_coord, img_mask = run()
 
     if board_coord is not None:
         # Create chess board object
@@ -72,8 +74,6 @@ def testCodeWithImage() :
         # Display for debugging
         displaySquares(chess_board.squares)
         chess_board.close()
-    else: 
-        print("Unable to find board")
 
 if __name__ == "__main__":
     USE_CAMERA = False
