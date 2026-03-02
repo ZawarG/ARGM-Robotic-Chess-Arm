@@ -65,6 +65,7 @@ def testCodeWithImage() :
     # board_coord, img_mask = localizeChessBoard(img, mask)
 
     board_coord, img_mask = run(img)
+    print("coord2", board_coord)
 
     if board_coord is not None:
         # Create chess board object
