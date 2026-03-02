@@ -40,7 +40,7 @@ def createMask(img, otsu_offset=0, border_high=7):
     border_msk = cv2.inRange(blurred, 0, border_high)
 
     # Merge both thresholds
-    res = np.ones_like(gray)*255 # White canvas
+    res = np.ones_like(gray)*127 # gray canvas
     res[squares_msk == 255] = 0 # Add in squares mask as black
     res[border_msk == 255] = 255 # Add in border mask as white
 
@@ -102,81 +102,134 @@ def reshapeCorners(corners):
     return board
 
 def adjustImageManually(img):
-    window_name = "Tuning"
-    cv2.namedWindow(window_name)
-
-    # Force window to a reasonable size
-    cv2.resizeWindow(window_name, 1000, 400)
+    view_window = "Chessboard View"
+    cv2.namedWindow(view_window, cv2.WINDOW_NORMAL)
 
     # Adjust size of image
     display_height = 500 
     scale = display_height / img.shape[0]
     display_width = int(img.shape[1] * scale)
-
     img_small = cv2.resize(img, (display_width, display_height))
 
+    createTrackbars(view_window)
+    print("Adjust sliders until the board is detected. Press 'ENTER' to confirm or 'ESC' to cancel.")
+
+    # Only run detection every X loops to reduce lag
+    loop_count = 0
+    corners = None
+    mask = None
+    prev_pos = []
+    ret = False
+
+    while True:
+        loop_count+=1
+
+        # Get current trackbar positions
+        curr_pos = list(getTrackbarPos(view_window))
+
+        # Check if anything has changed
+        changed_pos = curr_pos != prev_pos
+
+        # Only process if sliders change
+        if changed_pos or not ret:
+            sat, con, bright, bp, shd, border_lim = curr_pos
+
+            # Divide needed values by 10
+            if sat != 0: sat=sat/10.0
+            if con != 0: con=con/10.0
+            if shd != 0: shd=shd/10.0
+
+            # Process image
+            adjusted = applyImageAdjustments(img_small, sat, con, bright, bp, shd)
+            mask = createMask(adjusted, border_high=border_lim)
+        
+            # Attempt localization every 5 frames
+            if loop_count%5 == 0:
+                ret, corners = localizeChessBoard(adjusted, mask)
+
+            # Store positions
+            prev_pos = curr_pos
+
+        # Prepare display
+        display_img = adjusted.copy()
+        display_mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR) # convert mask to format that can be displayed
+
+        # Draw ui
+        drawAndDisplay(display_img, display_mask, ret, corners, [sat,con,bright,bp,shd,border_lim], display_height, view_window)
+
+        # Interaction handling
+        key = cv2.waitKey(1) & 0xFF
+        if key == 13: # ENTER key
+            full_corners = corners / scale
+            if ret and corners is not None:
+                full_corners = corners / scale
+                # Rerun full adjustment (previous adjustment was with smaller image)
+                final_adj = applyImageAdjustments(img, sat, con, bright, bp, shd)
+                final_mask = createMask(final_adj, border_high=border_lim)
+                print(sat, con, bright, bp, shd, border_lim)
+                return reshapeCorners(full_corners), final_mask
+        elif key == 27: # ESC key
+            break
+
+    cv2.destroyAllWindows()
+    return corners, mask
+
+def drawAndDisplay(img, mask, ret, corners, parameters, height, window):
+    # Draw corners on the preview if found
+    if ret:
+        cv2.drawChessboardCorners(img, (7, 7), corners, ret)
+
+    # Update status text
+    status_text = "CALIBRATED" if ret else "SCANNING..."
+    status_colour = (0, 255, 100) if ret else (0, 100, 255) # green or orange
+
+    # Dark bar at top for text
+    overlay = img.copy()
+    cv2.rectangle(overlay, (0, 0), (img.shape[1], 40), (40, 40, 40), -1) # Calibration text
+    cv2.rectangle(overlay, (0, 0), (mask.shape[1], 40), (40, 40, 40), -1) # Mask text
+    cv2.rectangle(overlay, (0, img.shape[0]-30), (img.shape[1], img.shape[0]), (20, 20, 20), -1) # Parameter summary text
+    
+    # Blend the overlay with original image (alpha transparency)
+    cv2.addWeighted(overlay, 0.6, img, 0.4, 0, img)
+    
+    # Add status
+    cv2.putText(img, f"{status_text}", (15, 27), 
+                cv2.FONT_HERSHEY_DUPLEX, 0.7, status_colour, 1, cv2.LINE_AA)
+    
+    # Add small parameter text at bottom
+    values_txt = f"SAT:{parameters[0]} | CON:{parameters[1]} | BRT:{parameters[2]} | BP:{parameters[3]} | SHADOW:{parameters[4]} | BORDER:{parameters[5]}"
+    cv2.putText(img, values_txt, (10, img.shape[0]-10), 
+                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1, cv2.LINE_AA)
+    
+    # Add label for mask side
+    cv2.putText(mask, "BINARY MASK", (10, 27), 
+                cv2.FONT_HERSHEY_DUPLEX, 0.6, (255, 255, 255), 1, cv2.LINE_AA)
+    
+    # Add divider between images
+    divider = np.zeros((height, 5, 3), dtype=np.uint8) + 180
+    stacked = np.hstack((img, divider, mask))
+
+    # Display
+    cv2.imshow(window, stacked)
+    
+def createTrackbars(window_name):
     # Create trackbars (scaled bc they only handle integers)
     cv2.createTrackbar("Saturation x10", window_name, 10, 50, lambda x: None) 
     cv2.createTrackbar("Contrast x10", window_name, 8, 30, lambda x: None)
     cv2.createTrackbar("Brightness", window_name, 100, 255, lambda x: None) # offset by 100 to allow negative
     cv2.createTrackbar("Black Point", window_name, 40, 100, lambda x: None)
     cv2.createTrackbar("Shadow x10", window_name, 16, 50, lambda x: None)
-    # cv2.createTrackbar("Mask Sens", window_name, 50, 100, lambda x: None)
     cv2.createTrackbar("Border Limit", window_name, 7, 50, lambda x: None)
 
-    print("Adjust sliders until the board is detected. Press 'ENTER' to confirm or 'ESC' to cancel.")
+def getTrackbarPos(window_name):
+    sat = cv2.getTrackbarPos("Saturation x10", window_name)
+    con = cv2.getTrackbarPos("Contrast x10", window_name)
+    bright = cv2.getTrackbarPos("Brightness", window_name) - 100 
+    bp = cv2.getTrackbarPos("Black Point", window_name)
+    shd = cv2.getTrackbarPos("Shadow x10", window_name)
+    border_lim = cv2.getTrackbarPos("Border Limit", window_name)
 
-    # Only run detection every X loops to reduce lag
-    loop_count = 0
-    coords = None
-    mask = None
-
-    while True:
-        loop_count+=1
-        ret = None
-
-        # get current trackbar positions
-        sat = cv2.getTrackbarPos("Saturation x10", window_name) / 10.0
-        con = cv2.getTrackbarPos("Contrast x10", window_name) / 10.0
-        bright = cv2.getTrackbarPos("Brightness", window_name) - 100 
-        bp = cv2.getTrackbarPos("Black Point", window_name)
-        shd = cv2.getTrackbarPos("Shadow x10", window_name) / 10.
-        border_lim = cv2.getTrackbarPos("Border Limit", window_name)
-
-        # Apply existing pipeline
-        adjusted = applyImageAdjustments(img_small, sat, con, bright, bp, shd)
-        mask = createMask(adjusted)
-        display_mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR) # convert to format that can be displayed
-        
-        # Attempt localization
-        if loop_count%5 == 0:
-            ret, corners = localizeChessBoard(adjusted, mask)
-
-        # Draw corners on the preview if found
-        if ret:
-            cv2.drawChessboardCorners(display_img, (7, 7), corners, ret)
-
-        # status header
-        status_color = (0, 255, 0) if coords is not None else (0, 0, 255)
-        display_img = adjusted.copy()
-        cv2.putText(display_img, "FOUND" if coords is not None else "SEARCHING", 
-                    (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
-
-        # adjusted image and mask displayed side-by-side for comparison
-        stacked = np.hstack((display_img, display_mask))
-        cv2.imshow(window_name, stacked)
-
-        # 6. Interaction handling
-        key = cv2.waitKey(1) & 0xFF
-        if key == 13: # ENTER key
-            full_corners = corners / scale
-
-            return reshapeCorners(full_corners), createMask(applyImageAdjustments(img, sat, con, bright, bp), border_high=border_lim)
-        elif key == 27: # ESC key
-            break
-
-    cv2.destroyWindow(window_name)
-    return coords, mask
+    return sat, con, bright, bp, shd, border_lim
 
 def run(img):
     # first try automatic detection with default adjustments
@@ -190,7 +243,7 @@ def run(img):
 
     return coords, mask
 
-
-image_path = "Chessboard Image Detection/data/input/IMG_5605.jpeg"
-img = cv2.imread(image_path)
-adjustImageManually(img)
+if __name__ == "__main__":
+    image_path = "Chessboard Image Detection/data/input/IMG_5605.jpeg"
+    img = cv2.imread(image_path)
+    adjustImageManually(img)
