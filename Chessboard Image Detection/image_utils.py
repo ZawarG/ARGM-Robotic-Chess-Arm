@@ -25,11 +25,14 @@ def applyImageAdjustments(img, sat = 5.0, con = 0.6, bright = -100, bp = 0, wp =
     return cv2.LUT(img, table)
 
 # Create binary masks -- one for square, one for board outline
-def createMask(img, otsu_offset=0, border_high=7, testing=False):
+def createMask(img, otsu_offset=0, border_high=7, testing=False, scale=1):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.medianBlur(gray, 7)
+    
+    blur_size = int(7*scale)
+    if blur_size%2 == 0: blur+=1
+    blurred = cv2.medianBlur(gray, blur_size)
 
-    # Otsu thresholding (automatically finds value for threshold by separating foreground and background)
+    # Otsu thresholding (automatically finds value for threshold by separating foreground and background
     otsu_th, msk = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     squares_msk = 255 - msk
 
@@ -49,7 +52,8 @@ def createMask(img, otsu_offset=0, border_high=7, testing=False):
     res[border_msk == 255] = 255 # Add in border mask as white
 
     # Morphology to clean up small noise
-    kernel = np.ones((5,5), np.uint8)
+    ker_size = int(5*scale)
+    kernel = np.ones((ker_size,ker_size), np.uint8)
     res = cv2.morphologyEx(res, cv2.MORPH_OPEN, kernel) # Removes small white noise
     res = cv2.morphologyEx(res, cv2.MORPH_CLOSE, kernel) # Fills small black holes
 
@@ -104,21 +108,14 @@ def reshapeCorners(corners):
 
     return board
 
-def adjustImageManually(img):
+def adjustImageManually(img_small, display_height, prev_pos):
     view_window = "Chessboard View"
     cv2.namedWindow(view_window, cv2.WINDOW_NORMAL)
-
-    # Adjust size of image
-    display_height = 500 
-    scale = display_height / img.shape[0]
-    display_width = int(img.shape[1] * scale)
-    img_small = cv2.resize(img, (display_width, display_height))
 
     # Only run detection every X loops to reduce lag
     loop_count = 0
     corners = None
     mask = None
-    prev_pos = [50, 6, 0, 0, 255, 16, 7]
     ret = False
 
     createTrackbars(view_window, prev_pos)
@@ -159,20 +156,14 @@ def adjustImageManually(img):
         # Interaction handling
         key = cv2.waitKey(30) & 0xFF
         if key == 13: # ENTER key
-            full_corners = corners / scale
-            if ret and corners is not None:
-                full_corners = corners / scale
-                # Rerun full adjustment (previous adjustment was with smaller image)
-                final_adj = applyImageAdjustments(img, sat, con, bright, bp, wp, shd)
-                final_mask = createMask(final_adj, border_high=border_lim)
-                print(sat, con, bright, bp, wp, shd, border_lim)
-                return reshapeCorners(full_corners), final_mask
+            if ret:
+                return corners, prev_pos
         elif key == 27: # ESC key
             break
 
     print(key)
     cv2.destroyAllWindows()
-    return corners, mask
+    return corners
 
 def drawAndDisplay(img, mask, ret, corners, parameters, height, window):
     # Draw corners on the preview if found
@@ -259,20 +250,47 @@ def enforceValues(curr_pos, prev_pos, view_window):
 
     return sat, con, bright, bp, wp, shd, border_lim
 
+def makeImgSmall(img):
+    display_height = 500 
+    scale = display_height / img.shape[0]
+    display_width = int(img.shape[1] * scale)
+    img_small = cv2.resize(img, (display_width, display_height))
+    return display_height, scale, img_small
+
+def reScaleImage(img, coords, scale, val):
+    coords = coords / scale
+    # Rerun full adjustment (previous adjustment was with smaller image)
+    adj = applyImageAdjustments(img, val[0], val[1], val[2], val[3], val[4], val[5])
+    mask = createMask(adj, border_high=val[6], scale=scale)
+    return coords, mask
+
 def run(img):
-    # first try automatic detection with default adjustments
-    img_n = applyImageAdjustments(img)
+    # original values
+    curr_val = [50, 6, 0, 0, 255, 16, 7]
+
+    # first try automatic detection with default adjustments and smaller image
+    height, scale, img_small = makeImgSmall(img)
+    img_n = applyImageAdjustments(img_small)
     mask = createMask(img_n)
-    ret, coords = localizeChessBoard(img, mask)
-    corners = reshapeCorners(coords) 
+    ret, coords = localizeChessBoard(img_small, mask)
 
-    if coords is None:
+    if not ret:
         print("Auto-detection failed")
-        coords, mask = adjustImageManually(img)
+        coords, curr_val = adjustImageManually(img_small, height, curr_val)
 
-    return corners, mask
+
+    # rescale coordinates and return mask of original image
+    new_coords, new_mask = reScaleImage(img, coords, scale, curr_val)
+    corners = reshapeCorners(new_coords) 
+
+    cv2.imshow("old", mask)
+    cv2.imshow("new", new_mask)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+    return corners, new_mask
 
 if __name__ == "__main__":
     image_path = "Chessboard Image Detection/data/input/IMG_5605.jpeg"
     img = cv2.imread(image_path)
-    adjustImageManually(img)
+    run(img)
