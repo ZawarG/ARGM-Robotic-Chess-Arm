@@ -50,27 +50,15 @@ def runVideoCapture():
     cam.release()
 
 def testCodeWithImage() :
-    image_path = "Chessboard Image Detection/data/input/fromvid.png"
+    image_path = "Chessboard Image Detection/data/input/IMG_5606.jpeg"
     img = cv2.imread(image_path)
 
-    # img_n = applyImageAdjustments(img)
-    # mask = createMask(img_n)
-
-    # cv2.imshow("original", img)
-    # cv2.imshow("adjusted", img_n)
-    # cv2.imshow("mask", mask)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
-
-    # board_coord, img_mask = localizeChessBoard(img, mask)
-
     board_coord, img_mask = run(img)
-    print("coord2", board_coord)
 
     if board_coord is not None:
         # Create chess board object
         chess_board = ChessBoard(board_coord)
-        chess_board.updateSquares(img_mask)
+        chess_board.updateSquares(img)
 
         # Display for debugging
         displaySquares(chess_board.squares)

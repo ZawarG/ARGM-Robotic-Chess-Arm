@@ -1,4 +1,4 @@
-# for visualization
+import cv2
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
@@ -16,6 +16,8 @@ def displaySquares(squares):
             ax = axes[i, j]
             img = squares[i][j].image
             
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
             # Check if image exists
             if img is None or img.size == 0:
                 print(f"Empty image at {i},{j}")
