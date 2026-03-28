@@ -1,5 +1,7 @@
 import pygame
 import chess
+import os
+from PIL import Image
 
 square_size = 80
 board_pixels = square_size * 8
@@ -36,10 +38,34 @@ class ChessVisualizer:
 
         self.clock = pygame.time.Clock()
 
-        # load images
         self.piece_images = {}
+
+        # absolute path logic
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        image_dir = os.path.join(script_dir, 'data', 'game-visualizer-images')
+
         for symbol, name in symbol_to_name.items():
-            img = pygame.image.load(f'Chessboard Image Detection/data/game-visualizer-images/{name}.png')
+            img_path = os.path.join(image_dir, f'{name}.png')
+
+            try:
+                pil_img = Image.open(img_path).convert("RGBA")
+
+                mode = pil_img.mode
+                size = pil_img.size
+                data = pil_img.tobytes()
+
+                py_img = pygame.image.fromstring(data, size, mode)
+
+                img = pygame.transform.scale(py_img, (square_size, square_size))
+                self.piece_images[name] = img
+            except Exception as e:
+                print(f"PIL failed: {e}")
+
+            if not os.path.exists(img_path):
+                raise FileNotFoundError(f"Could not find piece image: {img_path}")
+            
+            # print(f'Chessboard Image Detection/data/game-visualizer-images/{name}.png')
+            # img = pygame.image.load(img_path)
             img = pygame.transform.scale(img, (square_size, square_size))
             self.piece_images[name] = img
 
