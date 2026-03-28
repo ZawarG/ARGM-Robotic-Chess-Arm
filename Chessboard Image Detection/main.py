@@ -1,9 +1,60 @@
 import cv2
+import tkinter as tk
+from tkinter import ttk
 from chess_board import ChessBoard
 from image_utils import run, createMask
 from debug_utils import displaySquares
 
+def askPlayerColour():
+    # Ask player if they are white or black
+    result = [None] # True for player = black and False for player = white
+
+    root = tk.Tk()
+    root.title("Color Selection")
+    root.resizable(False, False)
+
+    # Center the window on screen
+    window_width, window_height = 400, 300
+    screen_width = root.winfo_screenwidth()
+    screen_height = root.winfo_screenheight()
+    x = (screen_width - window_width) // 2
+    y = (screen_height - window_height) // 2
+    root.geometry(f"{window_width}x{window_height}+{x}+{y}")
+
+    # Styles and colour
+    root.configure(bg="#1a1a2e")
+    style = ttk.Style(root)
+    style.theme_use("clam")
+
+    tk.Label(root, text="Choose Your Side", font=("Georgia", 16, "bold"), bg="#1a1a2e", fg="#e0d5c5",).pack(pady=(24, 4))
+
+    tk.Label(root, text="Which color are you playing as?", font=("Georgia", 10), bg="#1a1a2e", fg="#9a9ab0",).pack(pady=(0, 18))
+
+    btn_frame = tk.Frame(root, bg="#1a1a2e")
+    btn_frame.pack()
+
+    def choose(colour: bool):
+        result[0] = colour
+        root.destroy()
+
+    # White button
+    white_btn = tk.Button(btn_frame, text="♔ White", width=10, font=("Georgia", 12, "bold"), bg="#2c2c3e", fg="#e0d5c5", activebackground="#3d3d55", activeforeground="#ffffff", relief="flat", cursor="hand2", command=lambda: choose(False),)
+    white_btn.grid(row=0, column=0, padx=14, ipady=6)
+
+    # Black button
+    black_btn = tk.Button(btn_frame, text="♚ Black", width=10, font=("Georgia", 12, "bold"), bg="#f0ede0", fg="#1a1a2e", activebackground="#ffffff", activeforeground="#1a1a2e", relief="flat", cursor="hand2", command=lambda: choose(True),)
+    black_btn.grid(row=0, column=1, padx=14, ipady=6)
+
+    # If user closes window without choosing, default to player being white
+    root.protocol("WM_DELETE_WINDOW", lambda: choose(False))
+
+    root.mainloop()
+    return result[0]
+
 def runVideoCapture():
+    # Ask the user for their colour
+    player_colour = askPlayerColour()
+
     # Retrieve video, initialize coordinates
     cam = cv2.VideoCapture(0)
     board_coord = None
@@ -18,7 +69,7 @@ def runVideoCapture():
         board_coord, img_mask = run(img)
     
     # Chess board object initialization
-    if board_coord is not None: chess_board = ChessBoard(board_coord)
+    if board_coord is not None: chess_board = ChessBoard(board_coord, player_colour)
     if img_mask is not None: chess_board.updateSquares(img_mask)
 
     # Display chess squares for debugging
@@ -50,14 +101,17 @@ def runVideoCapture():
     cam.release()
 
 def testCodeWithImage() :
-    image_path = "Chessboard Image Detection/data/input/IMG_5606.jpeg"
+    # Ask the user for their colour
+    player_colour = askPlayerColour()
+
+    image_path = "Chessboard Image Detection/data/input/IMG_5605.jpeg"
     img = cv2.imread(image_path)
 
     board_coord, img_mask = run(img)
 
     if board_coord is not None:
         # Create chess board object
-        chess_board = ChessBoard(board_coord)
+        chess_board = ChessBoard(board_coord, player_colour)
         chess_board.updateSquares(img)
 
         # Display for debugging
@@ -71,13 +125,3 @@ if __name__ == "__main__":
         runVideoCapture()
     else: 
         testCodeWithImage()
-
-# TODO:
-# a1, etc is always white
-# a8, etc is always black
-# make moves accordingly
-# update outcome.winner accordingly
-# HOW TO IMPLEMENT:
-# Option 1: i need to know the perspective of the robot and which side of the screen it'll be on in relation
-#           from there, i can check if it is on the a8 side or a1 side
-# Option 2: tell the user to input

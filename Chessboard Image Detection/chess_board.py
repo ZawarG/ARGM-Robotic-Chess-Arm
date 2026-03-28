@@ -15,7 +15,7 @@ class GameState(Enum):
     GAME_OVER = auto()
 
 class ChessBoard:
-    def __init__(self, coord):
+    def __init__(self, coord, colour):
         self.coord = coord # list of all positions of each square in board
 
         # vision layer
@@ -33,8 +33,14 @@ class ChessBoard:
         self.pending_push_move = None
         self.last_move_by_human = False
 
+        # decide who is black/white
+        self.colour = colour
+        
         # game state
-        self.state = GameState.HUMAN_MOVING
+        if colour:
+            self.state = GameState.HUMAN_MOVING
+        else: 
+            self.state = GameState.ROBOT_MOVING
 
     # dispatching FSM states
     def update(self, img):
@@ -78,12 +84,12 @@ class ChessBoard:
 
         self.close()
 
-        if outcome.winner == True:
-            winner =  "Player"
-        elif outcome.winner == False:
-            winner =  "Robot"
-        else:
+        if outcome.winner == None:
             winner = "Draw"
+        elif outcome.winner == self.colour:
+            winner =  "Player"
+        else:
+            winner =  "Robot"
         
         # arduino.write(bytes('winner: ' + winner + '\n', 'utf-8')) 
 
