@@ -72,7 +72,7 @@ def localizeChessBoard(img, mask):
     if ret:
         # Detect and display chess board
         fnl = cv2.drawChessboardCorners(img, (7, 7), corners, ret)
-        # cv2.imshow("Chessboard with Corners", fnl)
+        cv2.imshow("Chessboard with Corners", fnl)
         # cv2.waitKey(0)
         # cv2.destroyAllWindows()
         
@@ -284,7 +284,7 @@ def run(img):
     corners = reshapeCorners(new_coords) 
 
     cv2.imshow("old", mask)
-    cv2.imshow("new", new_mask)
+    # cv2.imshow("new", new_mask)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 

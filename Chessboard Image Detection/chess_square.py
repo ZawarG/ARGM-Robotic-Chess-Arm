@@ -30,13 +30,20 @@ class ChessSquare: # responsibile for vision aspect
         if len(self.history) > self.history_size:
             self.history.pop(0)
 
-        # take value that occurs more
-        if len(self.history) == self.history_size:
-            true_count = sum(self.history) # true = 1, false = 0
-            false_count = self.history_size - true_count
-            self.occupied = true_count > false_count # majority wins
+        # # take value that occurs more
+        # if len(self.history) == self.history_size:
+        #     true_count = sum(self.history) # true = 1, false = 0
+        #     false_count = self.history_size - true_count
+        #     self.occupied = true_count > false_count # majority wins
+        # else:
+        #     # not enough history yet
+        #     current_occ = self.occupied
+
+        # for testing
+        if len(self.history) < self.history_size:
+            self.occupied = current_occ
         else:
-            # not enough history yet
-            current_occ = self.occupied
+            true_count = sum(self.history)
+            self.occupied = true_count > (self.history_size // 2)
 
         return self.occupied

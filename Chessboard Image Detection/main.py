@@ -118,10 +118,61 @@ def testCodeWithImage() :
         displaySquares(chess_board.squares)
         chess_board.close()
 
-if __name__ == "__main__":
-    USE_CAMERA = False
+def testCodeWithVideo():
+    player_colour = askPlayerColour()
+    video_path = "Chessboard Image Detection/data/videos/game-1.mp4"
 
-    if USE_CAMERA:
-        runVideoCapture()
-    else: 
-        testCodeWithImage()
+    cap = cv2.VideoCapture(video_path)
+    board_coord = None
+    chess_board = None
+
+    # Grab the first frame for board localization
+    ret, first_frame = cap.read()
+    if not ret:
+        print("Failed to read video")
+        return
+
+    board_coord, img_mask = run(first_frame)
+
+    if board_coord is None:
+        print("Board not detected in first frame")
+        cap.release()
+        return
+
+    chess_board = ChessBoard(board_coord, player_colour)
+    chess_board.updateSquares(first_frame)
+
+    print("Board localized. Starting occupancy test...")
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break  # end of video
+
+        img_mask = createMask(frame)
+        chess_board.updateSquares(img_mask)
+
+        # Print occupancy grid each frame for inspection
+        occ = chess_board.getObservedOccupancy()
+        print("\nOccupancy grid:")
+        for row in occ:
+            print(["X" if sq else "." for sq in row])
+
+        # Visual debug — show the frame
+        cv2.imshow("Video Frame", frame)
+        if cv2.waitKey(30) & 0xFF == ord('q'):
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+    chess_board.close()
+
+if __name__ == "__main__":
+    testCodeWithVideo()
+
+    # USE_CAMERA = False
+
+    # if USE_CAMERA:
+    #     runVideoCapture()
+    # else: 
+    #     testCodeWithImage()
