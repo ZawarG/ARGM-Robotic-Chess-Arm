@@ -1,35 +1,62 @@
 import cv2
 import numpy as np
 
-def extractCornersFromGrid(corners):
-    grid = corners.reshape(7,7,2) # Convert 1D array to 3D (grid[row][col][x,y])
+def getWarpedBoard(img, source_pts, board_size=800):
+    dest_pts = np.array([
+        [0, 0], 
+        [board_size, 0], 
+        [board_size, board_size], 
+        [0, board_size]
+    ], dtype="float32")
 
-    # Rotate grid until its orientation is correct (top-left square has the smallest coordinates)
+    # Perspective transform matrix
+    M = cv2.getPerspectiveTransform(source_pts, dest_pts)
+
+    warped_img = cv2.warpPerspective(img, M, (board_size, board_size))
+
+    cv2.imshow("warped", warped_img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+    # Generate 9x9 coordinates
+    coords = np.zeros((9, 9, 2), dtype=np.float32)
+    lin_space = np.linspace(0, board_size, 9)
+    
+    for row in range(9):
+        for col in range(9):
+            coords[row, col] = [lin_space[col], lin_space[row]]
+
+
+    return warped_img, coords
+
+def extractOuterCorners(corners):
+    # Reshape 1D array to 3D grid[row][col][x,y]
+    grid = corners.reshape(7,7,2)
+
+    # Fix orientation (rotate grid until top-left square has smallest coordinates)
     count = 0
     while count < 4:
-        top_left = grid[0, 0]
-        top_right = grid[6, 0]
-        bottom_left = grid[0,6]
+        tl = grid[0, 0]
+        bl = grid[6, 0]
+        tr = grid[0,6]
 
-        if (top_left[0] + top_left[1] > top_right[0] + top_right[1] or 
-            top_left[0] + top_left[1] > bottom_left[0] + bottom_left[1]):
+        if (tl[0] + tl[1] > tr[0] + tr[1] or tl[0] + tl[1] > bl[0] + bl[1]):
             grid = np.rot90(grid)
             count += 1
         else:
             break
     
-    # Calculate average distance between each square 
-    x_dist = (grid[0,6]-grid[0,0])/6 # Have 8 squares, 7 inner corners, and thus 6 intervals between corners
+    # Calculate average distance between each square (intervals between 7 corners = 6)
+    x_dist = (grid[0,6]-grid[0,0])/6
     y_dist = (grid[6,0]-grid[0,0])/6
 
-    # Create 9x9 array including outer coordinates
-    board = np.zeros((9, 9, 2)) # Empty numpy array
-    top_left = grid[0,0]-x_dist-y_dist # Start point
-    for row in range(9):
-        for col in range(9):
-            board[row, col] = top_left + (row * y_dist) + (col * x_dist)
+    # Retrieve four corners
+    top_left = grid[0,0] - x_dist - y_dist
+    top_right = grid[0,6] + x_dist - y_dist
+    bottom_left = grid[6,0] - x_dist + y_dist
+    bottom_right = grid[6,6] + x_dist + y_dist
 
-    return board
+    return np.array([top_left, top_right, bottom_right, bottom_left], dtype="float32")
 
 def detectSquares(img):
     # Run detection algorithm
@@ -50,7 +77,7 @@ def detectSquares(img):
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
-    return board_detected, corners
+    return board_detected, extractOuterCorners(corners)
 
 def preprocessImage(img, border_high=15, testing=False):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
