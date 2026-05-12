@@ -1,59 +1,32 @@
 import cv2
-import tkinter as tk
-from tkinter import ttk
+from ultralytics import YOLO
+import utils
+import calibration
 from chess_board import ChessBoard
-from image_utils import run, createMask
-from debug_utils import displaySquares
+import debugger
 
-def askPlayerColour():
-    # Ask player if they are white or black
-    result = [None] # True for player = black and False for player = white
+def runCalibration(img, model):
+    # Crop and preprocess
+    img_small = utils.makeImageSmall(img)
+    img_cropped = utils.cropImage(img_small, model)
+    img_mask = utils.preprocessImage(img_cropped)
 
-    root = tk.Tk()
-    root.title("Color Selection")
-    root.resizable(False, False)
+    # Attempt automatic detection
+    board_detected, board = utils.detectSquares(img_mask) # board provides the internal corners of the board as a 1D array of tuples
 
-    # Center the window on screen
-    window_width, window_height = 400, 300
-    screen_width = root.winfo_screenwidth()
-    screen_height = root.winfo_screenheight()
-    x = (screen_width - window_width) // 2
-    y = (screen_height - window_height) // 2
-    root.geometry(f"{window_width}x{window_height}+{x}+{y}")
+    # Manual detection if automatic fails
+    if not board_detected:
+        print("Automatic detection failed. Opening manual calibration.")
+        board_detected, corners = calibration.adjustImageManually(img_cropped)
 
-    # Styles and colour
-    root.configure(bg="#1a1a2e")
-    style = ttk.Style(root)
-    style.theme_use("clam")
+    # Retrieve square coordinates
+    corners = utils.extractCornersFromGrid(board)
 
-    tk.Label(root, text="Choose Your Side", font=("Georgia", 16, "bold"), bg="#1a1a2e", fg="#e0d5c5",).pack(pady=(24, 4))
-
-    tk.Label(root, text="Which color are you playing as?", font=("Georgia", 10), bg="#1a1a2e", fg="#9a9ab0",).pack(pady=(0, 18))
-
-    btn_frame = tk.Frame(root, bg="#1a1a2e")
-    btn_frame.pack()
-
-    def choose(colour: bool):
-        result[0] = colour
-        root.destroy()
-
-    # White button
-    white_btn = tk.Button(btn_frame, text="♔ White", width=10, font=("Georgia", 12, "bold"), bg="#2c2c3e", fg="#e0d5c5", activebackground="#3d3d55", activeforeground="#ffffff", relief="flat", cursor="hand2", command=lambda: choose(False),)
-    white_btn.grid(row=0, column=0, padx=14, ipady=6)
-
-    # Black button
-    black_btn = tk.Button(btn_frame, text="♚ Black", width=10, font=("Georgia", 12, "bold"), bg="#f0ede0", fg="#1a1a2e", activebackground="#ffffff", activeforeground="#1a1a2e", relief="flat", cursor="hand2", command=lambda: choose(True),)
-    black_btn.grid(row=0, column=1, padx=14, ipady=6)
-
-    # If user closes window without choosing, default to player being white
-    root.protocol("WM_DELETE_WINDOW", lambda: choose(False))
-
-    root.mainloop()
-    return result[0]
+    return board_detected, corners, img_cropped
 
 def runVideoCapture():
     # Ask the user for their colour
-    player_colour = askPlayerColour()
+    player_colour = calibration.askPlayerColour()
 
     # Retrieve video, initialize coordinates
     cam = cv2.VideoCapture(0)
@@ -61,25 +34,23 @@ def runVideoCapture():
 
     # Localization loop
     while board_coord is None:
-        # Read an image from the video stream
-        ret, img = cam.read()
+        ret, img = cam.read() # Read an image from the video stream
         if not ret: continue # Camera failed
         
-        # Apply adjustments and retrieve image
-        board_coord, img_mask = run(img)
+        board_detected, board_coord, img_mask = runCalibration(img, model) # Detect chessboard squares
     
-    # Chess board object initialization
+    # Initialize game
     if board_coord is not None: chess_board = ChessBoard(board_coord, player_colour)
     if img_mask is not None: chess_board.updateSquares(img_mask)
 
     # Display chess squares for debugging
-    displaySquares(chess_board.squares)
+    debugger.displaySquares(chess_board.squares)
 
     # Game loop
     print("Game start")
     running = True
     while running:
-        if not chess_board.vis.handle_events(): break # check if visualizer is closed
+        if not chess_board.vis.handle_events(): break # Check if visualizer is closed
 
         ret, img = cam.read()
         if not ret: break
@@ -100,79 +71,44 @@ def runVideoCapture():
     chess_board.close()
     cam.release()
 
-def testCodeWithImage() :
+def testCode() :
+    USE_IMAGE = 1
+
+    if USE_IMAGE:
+        image_path = "Chessboard Image Detection/data/input/IMG_5605.jpeg"
+        img = cv2.imread(image_path)
+    else:
+        video_path = "Chessboard Image Detection/data/videos/game-1.mp4"
+        cap = cv2.VideoCapture(video_path)
+
+        # Grab the first frame for board localization
+        ret, img = cap.read()
+        if not ret:
+            print("Failed to read video")
+            return
+
     # Ask the user for their colour
-    player_colour = askPlayerColour()
+    player_colour = calibration.askPlayerColour()
 
-    image_path = "Chessboard Image Detection/data/input/IMG_5605.jpeg"
-    img = cv2.imread(image_path)
+    # Detect board
+    board_detected, board_coord, img_mask = runCalibration(img, model)
 
-    board_coord, img_mask = run(img)
-
-    if board_coord is not None:
+    # Initialize game
+    if board_detected is not None:
         # Create chess board object
         chess_board = ChessBoard(board_coord, player_colour)
-        chess_board.updateSquares(img)
-
-        # Display for debugging
-        displaySquares(chess_board.squares)
-        chess_board.close()
-
-def testCodeWithVideo():
-    player_colour = askPlayerColour()
-    video_path = "Chessboard Image Detection/data/videos/game-1.mp4"
-
-    cap = cv2.VideoCapture(video_path)
-    board_coord = None
-    chess_board = None
-
-    # Grab the first frame for board localization
-    ret, first_frame = cap.read()
-    if not ret:
-        print("Failed to read video")
-        return
-
-    board_coord, img_mask = run(first_frame)
-
-    if board_coord is None:
-        print("Board not detected in first frame")
-        cap.release()
-        return
-
-    chess_board = ChessBoard(board_coord, player_colour)
-    chess_board.updateSquares(first_frame)
-
-    print("Board localized. Starting occupancy test...")
-
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break  # end of video
-
-        img_mask = createMask(frame)
         chess_board.updateSquares(img_mask)
 
-        # Print occupancy grid each frame for inspection
-        occ = chess_board.getObservedOccupancy()
-        print("\nOccupancy grid:")
-        for row in occ:
-            print(["X" if sq else "." for sq in row])
-
-        # Visual debug — show the frame
-        cv2.imshow("Video Frame", frame)
-        if cv2.waitKey(30) & 0xFF == ord('q'):
-            break
-
-    cap.release()
-    cv2.destroyAllWindows()
-    chess_board.close()
+        # Display for debugging
+        debugger.displaySquares(chess_board.squares)
+        chess_board.close()
 
 if __name__ == "__main__":
-    testCodeWithVideo()
+    model = YOLO("Chessboard Image Detection/models/best.pt")
 
-    # USE_CAMERA = False
+    USE_CAMERA = False
 
-    # if USE_CAMERA:
-    #     runVideoCapture()
-    # else: 
-    #     testCodeWithImage()
+    if USE_CAMERA:
+        runVideoCapture()
+    else: 
+        testCode()

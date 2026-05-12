@@ -1,0 +1,18 @@
+*Goal*
+Take image
+Detects board outline with YOLO
+Extract square coordinates
+Return data to allow for occupancy detection
+
+Why do this? It reduces all background noise, which was one of the largest factors causing difficulty in board detection.
+This increases board detection efficiency and reduces the need for an isolated location or specific board while playing the game.
+
+*Chess Board Localization*
+Step 1: Input images into roboflow, label, add augmentation, extract yolo dataset
+Step 2: Train YOLO model (bash: yolo pose train data=data.yaml model=yolov8n-pose.pt epochs=50 patience=40)
+
+For each run:
+Step 3: Use model to detect board
+Step 4: Crop and warp image to board
+Step 5: Detect chess square locations
+Step 6: Lock chess square locations for entire game. Detect occupancy (no change in method)
