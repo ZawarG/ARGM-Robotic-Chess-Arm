@@ -2,95 +2,96 @@ import cv2
 import numpy as np
 import tkinter as tk
 from tkinter import ttk
-from utils import preprocessImage, detectSquares
 
-def filterImage(img, sat=0.1, con=0.1, bright=0, bp=0, wp=255, shadow=0.1):
-    # Saturation
-    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    h, s, v, = cv2.split(hsv)
-    s = np.clip(s.astype(np.float32) * sat, 0, 255).astype(np.uint8)
-    img = cv2.cvtColor(cv2.merge([h, s, v]), cv2.COLOR_HSV2BGR)
+def orderPoints(points):
+    rect = np.zeros((4, 2), dtype="float32")
+    s = points.sum(axis=1)
+    rect[0] = points[np.argmin(s)]   # Top-left
+    rect[2] = points[np.argmax(s)]   # Bottom-right
 
-    # LUT
-    i = np.arange(256, dtype=np.float32)
+    diff = np.diff(points, axis=1)
+    rect[1] = points[np.argmin(diff)] # Top-right
+    rect[3] = points[np.argmax(diff)] # Bottom-left
+    return rect
 
-    # Contrast, brightness
-    lut_base = i * con + bright
+def adjustImageManually(img, ):
+    window_name = "Board Calibration"
+    cv2.namedWindow(window_name)
 
-    # Shadow
-    diff = max(float(wp - bp), 1.0)
-    inv_gamma = 1.0 / max(shadow, 0.01)
-    
-    table_vals = np.power(np.clip((lut_base - bp) / diff, 0, 1), inv_gamma) * 255
-    table = np.clip(table_vals, 0, 255).astype("uint8")
-    return cv2.LUT(img, table)
+    points = []
+    selected_id = -1
+    HEADER_HEIGHT = 100
 
-def getTrackbarParams(window):
-    return [
-        cv2.getTrackbarPos("Saturation x10", window) / 10.0,
-        cv2.getTrackbarPos("Contrast x10", window) / 10.0,
-        cv2.getTrackbarPos("Brightness", window) - 100,
-        cv2.getTrackbarPos("Black Point", window),
-        cv2.getTrackbarPos("White Point", window),
-        max(cv2.getTrackbarPos("Shadow x10", window), 1) / 10.0,
-        cv2.getTrackbarPos("Border Limit", window)
-    ]
+    def mouse_callback(event, x, y, flags, params):
+        nonlocal points, selected_id
 
-def adjustImageManually(img):
-    window = "Chessboard View"
-    cv2.namedWindow(window, cv2.WINDOW_NORMAL)
+        if event == cv2.EVENT_LBUTTONDOWN:
+            # Check if clicking near an existing point to edit it
+            for i, p in enumerate(points):
+                if np.linalg.norm(np.array([x, y]) - np.array(p)) < 15:
+                    selected_id = i
+                    return
+            
+            # If not editing and we have fewer than 4 points, add a new one
+            if len(points) < 4:
+                points.append([x, y])
 
-    # Initial neutral values
-    cv2.createTrackbar("Saturation x10", window, 10, 50, lambda x: None)
-    cv2.createTrackbar("Contrast x10", window, 10, 30, lambda x: None)
-    cv2.createTrackbar("Brightness", window, 100, 200, lambda x: None)
-    cv2.createTrackbar("Black Point", window, 0, 255, lambda x: None)
-    cv2.createTrackbar("White Point", window, 255, 255, lambda x: None)
-    cv2.createTrackbar("Shadow x10", window, 10, 50, lambda x: None)
-    cv2.createTrackbar("Border Limit", window, 7, 50, lambda x: None)
+        elif event == cv2.EVENT_MOUSEMOVE:
+            # Move selected point
+            if selected_id != -1:
+                points[selected_id] = [x, y]
 
-    corners, mask, ret = None, None, False
-    prev_params = []
+        elif event == cv2.EVENT_LBUTTONUP:
+            selected_id = -1
+
+        elif event == cv2.EVENT_RBUTTONDOWN:
+            # Right click to delete closest point
+            for i, p in enumerate(points):
+                if np.linalg.norm(np.array([x, y]) - np.array(p)) < 15:
+                    points.pop(i)
+                    break
+
+    cv2.setMouseCallback(window_name, mouse_callback)
 
     while True:
-        curr_params = getTrackbarParams(window)
-        
-        # Only re-process if sliders moved
-        if curr_params != prev_params:
-            s, c, br, bp, wp, sh, bdr = curr_params
+        display_canvas = cv2.copyMakeBorder(img, HEADER_HEIGHT, 0, 0, 0, cv2.BORDER_CONSTANT, value=[40, 40, 40])
 
-            # Auto-correct BP/WP overlap
-            if bp >= wp: 
-                bp = wp - 1
-                cv2.setTrackbarPos("Black Point", window, bp)
+        # Instructions
+        cv2.putText(display_canvas, "1. Click 4 corners", (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        cv2.putText(display_canvas, "2. Drag points to adjust", (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        cv2.putText(display_canvas, "3. Press ENTER when finished", (20, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        cv2.putText(display_canvas, "Click corners | Drag to adjust | ENTER to confirm", (20, 85), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
-            adjusted = filterImage(img, s, c, br, bp, wp, sh)
-            mask = preprocessImage(adjusted, border_high=bdr, testing=True)
-            
-            # Detect on the mask
-            board_detected, corners = detectSquares(mask)
-            prev_params = curr_params
-            
-        # UI Composition
-        disp_img = adjusted.copy()
-        if ret: cv2.drawChessboardCorners(disp_img, (7, 7), corners, ret)
-        
-        # Create a side-by-side view (Original/Adjusted | Mask)
-        disp_mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
-        divider = np.zeros((img.shape[0], 5, 3), dtype=np.uint8) + 180
-        stacked = np.hstack((disp_img, divider, disp_mask))
-        
-        cv2.imshow(window, stacked)
-        
+        # Draw points
+        for i, p in enumerate(points):
+            pos = (int(p[0]), int(p[1]))
+            cv2.circle(display_canvas, pos, 8, (0, 255, 0), -1)
+            cv2.putText(display_canvas, f"P{i+1}", (p[0]+10, p[1]-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+
+        # Draw a polygon if we have 4 points to show the current board area
+        if len(points) == 4:
+            pts_array = orderPoints(np.array(points))
+            cv2.polylines(display_canvas, [pts_array.astype(np.int32)], True, (0, 255, 255), 2)
+
+        cv2.imshow(window_name, display_canvas)
+
         key = cv2.waitKey(1) & 0xFF
-        if key == 13 and ret: # ENTER
-            # Upscale corners to original image size
-            return board_detected, corners, mask
-        elif key == 27: # ESC
-            break
+        if key == 13: # Enter Key
+            if len(points) == 4:
+                break
+            else:
+                print("Please select exactly 4 points before pressing Enter.")
+        elif key == ord('q'): # Quit/Abort
+            cv2.destroyWindow(window_name)
+            return False, None
+        
+    cv2.destroyWindow(window_name)
+    
+    # Sort and adjust points before returning
+    final_pts = orderPoints(np.array(points))
+    final_pts[:, 1] -= HEADER_HEIGHT
 
-    cv2.destroyAllWindows()
-    return None, None
+    return True, final_pts
 
 def askPlayerColour():
     # Ask player if they are white or black

@@ -12,17 +12,16 @@ def runCalibration(img, model):
     img_mask = utils.preprocessImage(img_cropped)
 
     # Attempt automatic detection
-    board_detected, board = utils.detectSquares(img_mask) # board provides the internal corners of the board as a 1D array of tuples
+    board_detected, corners = utils.detectSquares(img_mask) 
 
     # Manual detection if automatic fails
     if not board_detected:
         print("Automatic detection failed. Opening manual calibration.")
         board_detected, corners = calibration.adjustImageManually(img_cropped)
 
-    # Retrieve square coordinates
-    corners = utils.extractCornersFromGrid(board)
+    warped_img, coords = utils.getWarpedBoard(img_cropped, corners)
 
-    return board_detected, corners, img_cropped
+    return board_detected, coords, warped_img
 
 def runVideoCapture():
     # Ask the user for their colour
@@ -72,7 +71,7 @@ def runVideoCapture():
     cam.release()
 
 def testCode() :
-    USE_IMAGE = 1
+    USE_IMAGE = 0
 
     if USE_IMAGE:
         image_path = "Chessboard Image Detection/data/input/IMG_5605.jpeg"
@@ -106,7 +105,7 @@ def testCode() :
 if __name__ == "__main__":
     model = YOLO("Chessboard Image Detection/models/best.pt")
 
-    USE_CAMERA = False
+    USE_CAMERA = 0
 
     if USE_CAMERA:
         runVideoCapture()
