@@ -161,7 +161,7 @@ class ChessBoard:
         for row in range(8):
             for col in range(8):
                 # Store chess coordinate
-                if self.botIsWhite:
+                if self.bot_is_white:
                     # Robot is white => top left is a8
                     file = files[col]
                     rank = ranks[row]

@@ -143,6 +143,8 @@ def makeImageSmall(img):
     return img_small
 
 def checkOccupancy(img, is_light, coord, border_ratio=0.2):
+    triggered = False
+
     # Crop
     height, width = img.shape[:2]
     b_height = int(height * border_ratio)
@@ -153,23 +155,30 @@ def checkOccupancy(img, is_light, coord, border_ratio=0.2):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     avg_brightness = np.mean(gray)
 
-    print(avg_brightness, coord, is_light)
-    # cv2.imshow("gray", gray)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
-
-    # Compare brightness to square type (contrasting piece and square)
+    # For contrasting coloured piece and squares: compare brightness to square type
     if is_light:
         # Dark on light square
         if avg_brightness < 150:
-            return True
+            triggered = True
     else:
         # Light on dark square
         if avg_brightness > 160:
-            return True
+            triggered = True
         
-    # Similar colour piece and square
-    if gray.std() > 25: 
+    # For similar coloured piece and squares: check standard deviation
+    if gray.std() > 20: # Overshoot deviation so that it detects all pieces. It is okay for it to include some empty squares
+        triggered = True
+    
+    # Verification of occupancy: canny edge detection. This will filter out any unoccupied squares
+    if triggered:
+        blurred = cv2.GaussianBlur(gray, (15, 15), 0) # Heavy blur to remove wood grain
+        edges = cv2.Canny(blurred, 30, 100)
+        edge_density = np.sum(edges > 0)
+
+        # If there are almost no edges, it is just shadow or wood grain
+        if edge_density < 15: # Tune this '15' based on your resolution
+            return False
+        
         return True
 
     return False
