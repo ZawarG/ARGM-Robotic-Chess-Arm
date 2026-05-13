@@ -88,7 +88,7 @@ def testCode() :
 
     # Ask the user for their colour
     # player_colour = calibration.askPlayerColour()
-    player_colour = True
+    playerIsBlack = True # Player is black
 
     # Detect board
     board_detected, board_coord, warped_img = runCalibration(img, model)
@@ -96,7 +96,7 @@ def testCode() :
     # Initialize game
     if board_detected is not None:
         # Create chess board object
-        chess_board = ChessBoard(board_coord, player_colour)
+        chess_board = ChessBoard(board_coord, playerIsBlack)
         chess_board.initializeSquares(warped_img)
 
         # Display for debugging

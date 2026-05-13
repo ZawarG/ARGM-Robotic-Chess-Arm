@@ -12,7 +12,7 @@ class ChessSquare: # responsibile for vision aspect
 
         file_int = ord(file) - 96
         self.coord = f"{file}{rank}"
-        self.colour = (file_int+rank) % 2 # 0 for dark, 1 for light
+        self.is_light_square = (file_int+rank) % 2 # 0 for dark, 1 for light
 
         # initialize piece info
         self.occupied = False # from image analysis
@@ -22,7 +22,7 @@ class ChessSquare: # responsibile for vision aspect
         self.history_size = 5
         
     def isOccupied(self):
-        current_occ = utils.checkOccupancy(self.image, self.colour, self.coord)
+        current_occ = utils.checkOccupancy(self.image, self.is_light_square, self.coord)
 
         # add to history
         self.history.append(current_occ)
