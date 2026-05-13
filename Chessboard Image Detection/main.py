@@ -71,10 +71,10 @@ def runVideoCapture():
     cam.release()
 
 def testCode() :
-    USE_IMAGE = 0
+    USE_IMAGE = 1
 
     if USE_IMAGE:
-        image_path = "Chessboard Image Detection/data/input/IMG_5605.jpeg"
+        image_path = "Chessboard Image Detection/data/input/IMG_0305.jpg"
         img = cv2.imread(image_path)
     else:
         video_path = "Chessboard Image Detection/data/videos/game-1.mp4"
@@ -87,16 +87,17 @@ def testCode() :
             return
 
     # Ask the user for their colour
-    player_colour = calibration.askPlayerColour()
+    # player_colour = calibration.askPlayerColour()
+    player_colour = True
 
     # Detect board
-    board_detected, board_coord, img_mask = runCalibration(img, model)
+    board_detected, board_coord, warped_img = runCalibration(img, model)
 
     # Initialize game
     if board_detected is not None:
         # Create chess board object
         chess_board = ChessBoard(board_coord, player_colour)
-        chess_board.updateSquares(img_mask)
+        chess_board.initializeSquares(warped_img)
 
         # Display for debugging
         debugger.displaySquares(chess_board.squares)

@@ -18,9 +18,22 @@ def adjustImageManually(img, ):
     window_name = "Board Calibration"
     cv2.namedWindow(window_name)
 
+    # Window dimensions
+    WIN_W = 1000
+    WIN_H = 800
+    HEADER_H = 100  # Fixed space for two lines of text
+
+    # Calculate scale to fit image in window
+    available_h = WIN_H - HEADER_H
+    scale = min(WIN_W / img.shape[1], available_h / img.shape[0])
+
+    # Resize image for display
+    new_w = int(img.shape[1] * scale)
+    new_h = int(img.shape[0] * scale)
+    img_display = cv2.resize(img, (new_w, new_h))
+
     points = []
     selected_id = -1
-    HEADER_HEIGHT = 100
 
     def mouse_callback(event, x, y, flags, params):
         nonlocal points, selected_id
@@ -54,26 +67,34 @@ def adjustImageManually(img, ):
     cv2.setMouseCallback(window_name, mouse_callback)
 
     while True:
-        display_canvas = cv2.copyMakeBorder(img, HEADER_HEIGHT, 0, 0, 0, cv2.BORDER_CONSTANT, value=[40, 40, 40])
+        canvas = np.zeros((WIN_H, WIN_W, 3), dtype=np.uint8)
 
-        # Instructions
-        cv2.putText(display_canvas, "1. Click 4 corners", (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        cv2.putText(display_canvas, "2. Drag points to adjust", (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        cv2.putText(display_canvas, "3. Press ENTER when finished", (20, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        cv2.putText(display_canvas, "Click corners | Drag to adjust | ENTER to confirm", (20, 85), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        # Center image in canvas
+        x_offset = (WIN_W - new_w) // 2
+        canvas[HEADER_H : HEADER_H + new_h, x_offset : x_offset + new_w] = img_display
+
+        # Instructions text
+        line1 = "Click 4 corners | Drag to adjust | Right click to remove"
+        line2 = "ENTER: Confirm | Q: Abort"
+
+        for i, text in enumerate([line1, line2]):
+            (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)
+            tx = 20
+            ty = 40 + (i * 35) # Spacing between lines
+            cv2.putText(canvas, text, (tx, ty), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1, cv2.LINE_AA)
 
         # Draw points
         for i, p in enumerate(points):
-            pos = (int(p[0]), int(p[1]))
-            cv2.circle(display_canvas, pos, 8, (0, 255, 0), -1)
-            cv2.putText(display_canvas, f"P{i+1}", (p[0]+10, p[1]-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+            draw_x = int(p[0])
+            draw_y = int(p[1])
+            cv2.circle(canvas, (draw_x, draw_y), 6, (0, 255, 0), -1)
 
         # Draw a polygon if we have 4 points to show the current board area
         if len(points) == 4:
             pts_array = orderPoints(np.array(points))
-            cv2.polylines(display_canvas, [pts_array.astype(np.int32)], True, (0, 255, 255), 2)
+            cv2.polylines(canvas, [pts_array.astype(np.int32)], True, (0, 255, 255), 2)
 
-        cv2.imshow(window_name, display_canvas)
+        cv2.imshow(window_name, canvas)
 
         key = cv2.waitKey(1) & 0xFF
         if key == 13: # Enter Key
@@ -88,10 +109,11 @@ def adjustImageManually(img, ):
     cv2.destroyWindow(window_name)
     
     # Sort and adjust points before returning
-    final_pts = orderPoints(np.array(points))
-    final_pts[:, 1] -= HEADER_HEIGHT
+    final_pts = orderPoints(np.array(points)) 
+    final_pts[:, 1] -= HEADER_H
+    final_pts[:, 0] -= x_offset
 
-    return True, final_pts
+    return True, final_pts/scale
 
 def askPlayerColour():
     # Ask player if they are white or black

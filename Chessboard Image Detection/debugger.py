@@ -44,7 +44,7 @@ def displaySquares(squares):
             ax.add_patch(rect)
             
             # Add labels like 'a8', 'b8', etc.
-            ax.set_title(f"{files[j]}{ranks[i]}", fontsize=8)
+            ax.set_title(f"{squares[i][j].coord}", fontsize=8)
             
             # Hide axes
             ax.axis('off')

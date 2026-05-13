@@ -4,6 +4,11 @@ import chess, chess.engine
 from enum import Enum, auto
 import serial
 
+"""
+The entire chessboard is an object. 
+This class handles the game engine/finite state machine.
+"""
+
 # Replace 'COM4' with your Arduino's port (e.g., '/dev/ttyUSB0')
 # Ensure the baud rate matches the one in your Arduino code
 # arduino = serial.Serial(port='COM4', baudrate=115200, timeout=.1)
@@ -29,12 +34,12 @@ class ChessBoard:
         self.engine = chess.engine.SimpleEngine.popen_uci("/opt/homebrew/bin/stockfish")
 
         # chess visualizer
-        self.vis = ChessVisualizer(self.board)
+        # self.vis = ChessVisualizer(self.board)
         self.pending_push_move = None
         self.last_move_by_human = False
 
         # decide who is black/white
-        self.colour = colour
+        self.colour = colour # Robot is white => true
         
         # game state
         if colour:
@@ -142,16 +147,38 @@ class ChessBoard:
     def updateSquares(self, img):
         for row in range(8):
             for col in range(8):
+                # Retrieve image
                 top_left = self.coord[row, col]
                 bottom_right = self.coord[row+1, col+1]
-
                 cropped_square = img[int(top_left[1]):int(bottom_right[1]), int(top_left[0]):int(bottom_right[0])]
                 
-                if self.squares[row][col] is None:
-                    square_object = ChessSquare(cropped_square, row, col)
-                    self.squares[row][col] = square_object
-                else:
-                    self.squares[row][col].image = cropped_square
+                # Update image
+                self.squares[row][col].image = cropped_square
+
+    def initializeSquares(self, img):
+        files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+        ranks = [8, 7, 6, 5, 4, 3, 2, 1]
+
+        for row in range(8):
+            for col in range(8):
+                # Store chess coordinate
+                if self.colour:
+                    # Robot is white => top left is a8
+                    file = files[col]
+                    rank = ranks[row]
+                else: 
+                    # Robot is black => top left is a1
+                    file = files[col]
+                    rank = ranks[7-row]
+
+                # Retrieve image
+                top_left = self.coord[row, col]
+                bottom_right = self.coord[row+1, col+1]
+                cropped_square = img[int(top_left[1]):int(bottom_right[1]), int(top_left[0]):int(bottom_right[0])]
+                
+                # Create and save object
+                square_object = ChessSquare(cropped_square, row, col, file, rank)
+                self.squares[row][col] = square_object
 
     # changed squares -> legal chess move
     def detectMove(self, changed):
@@ -238,59 +265,3 @@ class ChessBoard:
                     changed.append((row, col))
 
         return changed
-    
-    # FOR TESTING ----
-    def setObservedFromBoard(self, board):
-        self.test_observed = [[False]*8 for _ in range(8)]
-        for square in chess.SQUARES:
-            piece = board.piece_at(square)
-            if piece:
-                row = 7 - (square // 8)
-                col = square % 8
-                self.test_observed[row][col] = True
-
-    def force_human_move(self, uci_move: str):
-        # Simulate a human move for testing purposes.
-        move = chess.Move.from_uci(uci_move)
-        if move in self.board.legal_moves:
-            # Update observed squares to simulate move
-            test_board = self.board.copy()
-            test_board.push(move)
-            self.setObservedFromBoard(test_board)
-            print(f"[TEST] Simulated human move: {uci_move}")
-    
-# TESTING CODE
-"""
-Verify this loop works:
-Human moving ->
-Robot moving ->
-Human moving ->
-"""
-if __name__ == "__main__":
-    test_human_moves = ["e2e4", "d7d5", "e4d5", "b8c6", "g1f3"]
-    move_idx = 0
-    cb = ChessBoard(coord=None)
-    cb.setObservedFromBoard(cb.board)
-
-    running = True
-    while running:
-        # Check if visualizer is still running
-        if not cb.vis.running:
-            break
-
-        # Simulate human input for testing
-        if cb.state == GameState.HUMAN_MOVING and move_idx < len(test_human_moves):
-            # Slow down simulation so we can see it
-            cb.force_human_move(test_human_moves[move_idx])
-            move_idx += 1
-
-        # Update FSM
-        outcome = cb.update(None)
-
-        # Check for game over
-        if outcome:
-            print(f"Game Result: {outcome}")
-            running = False
-
-    cb.vis.quit()
-    cb.close()
