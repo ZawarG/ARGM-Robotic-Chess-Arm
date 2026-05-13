@@ -1,8 +1,18 @@
+import utils
+
+"""
+Each square in the chess board is its own object.
+This class handles the vision aspect of the game. Specifically, each square's occupancy is checked
+"""
 class ChessSquare: # responsibile for vision aspect
-    def __init__(self, image, row, col):
+    def __init__(self, image, row, col, file, rank):
         self.image = image
         self.row = row
         self.col = col
+
+        file_int = ord(file) - 96
+        self.coord = f"{file}{rank}"
+        self.colour = (file_int+rank) % 2 # 0 for dark, 1 for light
 
         # initialize piece info
         self.occupied = False # from image analysis
@@ -11,17 +21,8 @@ class ChessSquare: # responsibile for vision aspect
         self.history = []
         self.history_size = 5
         
-    def cropCenter(self, border_ratio = 0.2): # avoids error in isOccupied since colours from adjacent squares may be showing
-        height, width = self.image.shape[:2]
-        b_height = int(height * border_ratio)
-        b_width = int(width * border_ratio)
-        return self.image[b_height:height-b_height, b_width:width-b_width]
-
     def isOccupied(self):
-        center = self.cropCenter()
-
-        # standard deviation threshold to detect if square is occupied
-        current_occ = center.std() > 20
+        current_occ = utils.checkOccupancy(self.image, self.colour, self.coord)
 
         # add to history
         self.history.append(current_occ)
