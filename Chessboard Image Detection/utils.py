@@ -142,7 +142,7 @@ def makeImageSmall(img):
     img_small = cv2.resize(img, (display_width, display_height))
     return img_small
 
-def checkOccupancy(img, colour, coord, border_ratio=0.2):
+def checkOccupancy(img, is_light, coord, border_ratio=0.2):
     # Crop
     height, width = img.shape[:2]
     b_height = int(height * border_ratio)
@@ -153,13 +153,13 @@ def checkOccupancy(img, colour, coord, border_ratio=0.2):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     avg_brightness = np.mean(gray)
 
-    print(avg_brightness, coord, colour)
+    print(avg_brightness, coord, is_light)
     # cv2.imshow("gray", gray)
     # cv2.waitKey(0)
     # cv2.destroyAllWindows()
 
     # Compare brightness to square type (contrasting piece and square)
-    if colour:
+    if is_light:
         # Dark on light square
         if avg_brightness < 150:
             return True
@@ -169,7 +169,7 @@ def checkOccupancy(img, colour, coord, border_ratio=0.2):
             return True
         
     # Similar colour piece and square
-    if gray.std() > 22: 
+    if gray.std() > 25: 
         return True
 
     return False

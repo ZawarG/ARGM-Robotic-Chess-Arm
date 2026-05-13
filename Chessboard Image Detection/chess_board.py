@@ -20,7 +20,7 @@ class GameState(Enum):
     GAME_OVER = auto()
 
 class ChessBoard:
-    def __init__(self, coord, colour):
+    def __init__(self, coord, bot_is_white):
         self.coord = coord # list of all positions of each square in board
 
         # vision layer
@@ -28,7 +28,6 @@ class ChessBoard:
 
         # chess board
         self.board = chess.Board()
-        self.human_colour = chess.WHITE
 
         # chess engine
         self.engine = chess.engine.SimpleEngine.popen_uci("/opt/homebrew/bin/stockfish")
@@ -39,13 +38,13 @@ class ChessBoard:
         self.last_move_by_human = False
 
         # decide who is black/white
-        self.colour = colour # Robot is white => true
+        self.bot_is_white = bot_is_white
         
         # game state
-        if colour:
-            self.state = GameState.HUMAN_MOVING
-        else: 
+        if self.bot_is_white:
             self.state = GameState.ROBOT_MOVING
+        else: 
+            self.state = GameState.HUMAN_MOVING
 
     # dispatching FSM states
     def update(self, img):
@@ -91,7 +90,7 @@ class ChessBoard:
 
         if outcome.winner == None:
             winner = "Draw"
-        elif outcome.winner == self.colour:
+        elif outcome.winner == self.bot_is_white: # outcome.winner is true if it's 
             winner =  "Player"
         else:
             winner =  "Robot"
@@ -162,7 +161,7 @@ class ChessBoard:
         for row in range(8):
             for col in range(8):
                 # Store chess coordinate
-                if self.colour:
+                if self.botIsWhite:
                     # Robot is white => top left is a8
                     file = files[col]
                     rank = ranks[row]
