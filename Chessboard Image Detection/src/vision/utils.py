@@ -26,7 +26,6 @@ def getWarpedBoard(img, source_pts, board_size=800):
         for col in range(9):
             coords[row, col] = [lin_space[col], lin_space[row]]
 
-
     return warped_img, coords
 
 def extractOuterCorners(corners):
@@ -142,9 +141,7 @@ def makeImageSmall(img):
     img_small = cv2.resize(img, (display_width, display_height))
     return img_small
 
-def checkOccupancy(img, is_light, coord, border_ratio=0.2):
-    triggered = False
-
+def getSquareBrightness(img, border_ratio=0.33):
     # Crop
     height, width = img.shape[:2]
     b_height = int(height * border_ratio)
@@ -155,30 +152,47 @@ def checkOccupancy(img, is_light, coord, border_ratio=0.2):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     avg_brightness = np.mean(gray)
 
-    # For contrasting coloured piece and squares: compare brightness to square type
+    return gray, avg_brightness
+
+def checkOccupancy(img, is_light, profile):
+    triggered = False
+
+    gray, avg_brightness = getSquareBrightness(img)
+
+    # Brightness check (is square significantly lighter/darker than empty avg)
     if is_light:
         # Dark on light square
-        if avg_brightness < 150:
+        if avg_brightness < profile['mean'] - (1.5*profile['std']):
             triggered = True
     else:
         # Light on dark square
-        if avg_brightness > 160:
+        if avg_brightness > profile['mean'] + (1.5*profile['std']):
             triggered = True
         
-    # For similar coloured piece and squares: check standard deviation
-    if gray.std() > 20: # Overshoot deviation so that it detects all pieces. It is okay for it to include some empty squares
+    # Texture check (standard deviation)
+    std_thresh = 10 if is_light else 6
+    if gray.std() > std_thresh: # Overshoot deviation so that it detects all pieces. It is okay for it to include some empty squares
         triggered = True
     
-    # Verification of occupancy: canny edge detection. This will filter out any unoccupied squares
+    # Final verification
+    # Canny edge detection will filter out any unoccupied squares
     if triggered:
-        blurred = cv2.GaussianBlur(gray, (15, 15), 0) # Heavy blur to remove wood grain
-        edges = cv2.Canny(blurred, 30, 100)
+        blurred = cv2.GaussianBlur(gray, (7, 7), 0) # Reduced blur for black squares
+        # Heavy blur to remove wood grain (was 15)
+
+        v = np.median(img) # median of pixel intensities
+
+        lower = int(max(0, (1.0 - .33) * v * 0.05))
+        upper = int(min(255, (1.0 + .33) * v))
+
+
+    #     canny_low = 30 if is_light else 15
+    #     canny_high = 100 if is_light else 50
+        edges = cv2.Canny(blurred, lower, upper)
         edge_density = np.sum(edges > 0)
 
         # If there are almost no edges, it is just shadow or wood grain
-        if edge_density < 15: # Tune this '15' based on your resolution
-            return False
-        
-        return True
-
+        if edge_density > 0:
+            return True
     return False
+    return triggered

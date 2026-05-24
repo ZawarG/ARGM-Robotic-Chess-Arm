@@ -1,4 +1,4 @@
-import utils
+import src.vision.utils as utils
 
 """
 Each square in the chess board is its own object.
@@ -7,8 +7,6 @@ This class handles the vision aspect of the game. Specifically, each square's oc
 class ChessSquare: # responsibile for vision aspect
     def __init__(self, image, row, col, file, rank):
         self.image = image
-        self.row = row
-        self.col = col
 
         file_int = ord(file) - 96
         self.coord = f"{file}{rank}"
@@ -20,9 +18,12 @@ class ChessSquare: # responsibile for vision aspect
         # frame history
         self.history = []
         self.history_size = 5
+
+    def setReference(self, value):
+        self.base_profile = value
         
-    def isOccupied(self):
-        current_occ = utils.checkOccupancy(self.image, self.is_light_square, self.coord)
+    def isOccupied(self, profile):
+        current_occ = utils.checkOccupancy(self.image, self.is_light_square, profile)
 
         # add to history
         self.history.append(current_occ)
