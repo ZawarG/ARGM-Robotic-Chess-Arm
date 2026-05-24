@@ -16,3 +16,16 @@ Step 3: Use model to detect board
 Step 4: Crop and warp image to board
 Step 5: Detect chess square locations
 Step 6: Lock chess square locations for entire game. Detect occupancy (no change in method)
+
+*Occupancy Detection*
+Step 1: Separate chess board image into 64 individual squares. While doing so, classify their colour (light or dark)
+Step 2: Initialize a reference set for unoccupied squares
+    Take squares from a6 to h3
+    Save a light square average brightness and a dark square average brightness. Store these as base_light and base_dark
+Step 3: Check occupancy of each square:
+    Crop the image to reduce the chance of getting any information from neighbouring squares
+    Turn the image grayscale and calculate its average brightness
+    Determine occupancy based on whether the average brightness of the square is within a set range of the base colour
+    Otherwise, detect based on the standard deviation of colours in the square
+    Validation check: Blur and search for edges on detected occupied squares. If they do not exist, mark the square as unoccupied
+
