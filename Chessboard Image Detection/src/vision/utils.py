@@ -1,6 +1,11 @@
 import cv2
 import numpy as np
 
+#  (\(\
+# ( -.-)
+# o_(")(")
+# This file holds stateless helper functions related to computer vision
+
 def getWarpedBoard(img, source_pts, board_size=800):
     dest_pts = np.array([
         [0, 0], 
@@ -141,58 +146,42 @@ def makeImageSmall(img):
     img_small = cv2.resize(img, (display_width, display_height))
     return img_small
 
-def getSquareBrightness(img, border_ratio=0.33):
+def getSquareFeatures(img, border_ratio=0.33):
     # Crop
     height, width = img.shape[:2]
     b_height = int(height * border_ratio)
     b_width = int(width * border_ratio)
     img = img[b_height:height-b_height, b_width:width-b_width]
 
-    # Detect average brightness
+    # Detect average brightness and std
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     avg_brightness = np.mean(gray)
+    std = gray.std()
 
-    return gray, avg_brightness
+    return gray, avg_brightness, std
 
 def checkOccupancy(img, is_light, profile):
     triggered = False
 
-    gray, avg_brightness = getSquareBrightness(img)
+    gray, avg_brightness, std = getSquareFeatures(img)
 
     # Brightness check (is square significantly lighter/darker than empty avg)
     if is_light:
         # Dark on light square
-        if avg_brightness < profile['mean'] - (1.5*profile['std']):
+        if avg_brightness < profile['avg_bright'] - (2*profile['std_bright']):
+            print(f"Brightness triggered: {avg_brightness:.2f} < {profile['avg_bright'] - (2*profile['std_bright']):.2f}")
             triggered = True
     else:
         # Light on dark square
-        if avg_brightness > profile['mean'] + (1.5*profile['std']):
+        if avg_brightness > profile['avg_bright'] + (2*profile['std_bright']):
+            print(f"Brightness triggered: {avg_brightness:.2f} > {profile['avg_bright'] - (2*profile['std_bright']):.2f}")
             triggered = True
         
-    # Texture check (standard deviation)
-    std_thresh = 10 if is_light else 6
-    if gray.std() > std_thresh: # Overshoot deviation so that it detects all pieces. It is okay for it to include some empty squares
+    # Texture/contrast check
+    if std > profile['max_std'] * 1.05:
         triggered = True
-    
-    # Final verification
-    # Canny edge detection will filter out any unoccupied squares
-    if triggered:
-        blurred = cv2.GaussianBlur(gray, (7, 7), 0) # Reduced blur for black squares
-        # Heavy blur to remove wood grain (was 15)
-
-        v = np.median(img) # median of pixel intensities
-
-        lower = int(max(0, (1.0 - .33) * v * 0.05))
-        upper = int(min(255, (1.0 + .33) * v))
-
-
-    #     canny_low = 30 if is_light else 15
-    #     canny_high = 100 if is_light else 50
-        edges = cv2.Canny(blurred, lower, upper)
-        edge_density = np.sum(edges > 0)
-
-        # If there are almost no edges, it is just shadow or wood grain
-        if edge_density > 0:
-            return True
-    return False
+        print(
+            f"Occupied: std={std:.4f}, threshold={profile['max_std']*1.05:.4f}"
+        )
+        
     return triggered

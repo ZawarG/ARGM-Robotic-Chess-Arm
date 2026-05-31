@@ -1,9 +1,12 @@
 import src.vision.utils as utils
 
-"""
-Each square in the chess board is its own object.
-This class handles the vision aspect of the game. Specifically, each square's occupancy is checked
-"""
+#  (\(\
+# ( -.-)
+# o_(")(")
+# Each square in the chess board is its own object.
+# This class handles the vision aspect of the game. 
+# Specifically, each square's occupancy is checked
+
 class ChessSquare: # responsibile for vision aspect
     def __init__(self, image, row, col, file, rank):
         self.image = image

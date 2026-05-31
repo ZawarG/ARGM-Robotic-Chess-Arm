@@ -5,6 +5,11 @@ import src.vision.utils as utils
 import src.ui.calibration as calibration
 import src.ui.debugger as debugger
 
+#  (\(\
+# ( -.-)
+# o_(")(")
+# This file runs essential functions used to detect the chess board, followed by the main game loop
+
 def main():
     model = YOLO("Chessboard Image Detection/models/best.pt")
     cam = cv2.VideoCapture(0)
@@ -62,7 +67,7 @@ def testCode() :
     USE_IMAGE = 1
 
     if USE_IMAGE:
-        image_path = "Chessboard Image Detection/data/input/IMG_0305.jpg"
+        image_path = "Chessboard Image Detection/data/input/IMG_0302.jpg"
         img = cv2.imread(image_path)
     else:
         video_path = "Chessboard Image Detection/data/videos/game.mp4"
