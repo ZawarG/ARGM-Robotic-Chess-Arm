@@ -5,10 +5,11 @@ from src.vision.board_vision import BoardVision
 from src.ui.visualize import ChessVisualizer
 from src.hardware.robot import RobotController
 
-"""
-The entire chessboard is an object. 
-This class handles the game engine/finite state machine.
-"""
+#  (\(\
+# ( -.-)
+# o_(")(")
+# The entire chessboard is an object. 
+# This class handles the game engine/finite state machine.
 
 class GameState(Enum):
     HUMAN_MOVING = auto()

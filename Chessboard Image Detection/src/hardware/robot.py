@@ -1,5 +1,11 @@
 import serial
 
+#  (\(\
+# ( -.-)
+# o_(")(")
+# This class is used to implement serial communication with the robot
+# It tells the robot to physically move when needed
+
 # Replace 'COM4' with your Arduino's port (e.g., '/dev/ttyUSB0')
 # Ensure the baud rate matches the one in your Arduino code
 # arduino = serial.Serial(port='COM4', baudrate=115200, timeout=.1)

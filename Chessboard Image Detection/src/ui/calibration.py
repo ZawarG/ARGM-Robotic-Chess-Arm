@@ -3,6 +3,11 @@ import numpy as np
 import tkinter as tk
 from tkinter import ttk
 
+#  (\(\
+# ( -.-)
+# o_(")(")
+# This file contains calibration functions, used to either manually determine the location of the board or the player colour
+
 def orderPoints(points):
     rect = np.zeros((4, 2), dtype="float32")
     s = points.sum(axis=1)

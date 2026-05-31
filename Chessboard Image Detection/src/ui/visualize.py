@@ -3,6 +3,11 @@ import chess
 import os
 from PIL import Image
 
+#  (\(\
+# ( -.-)
+# o_(")(")
+# This class visualizes the real-life chess game in an online screen with live updates
+
 square_size = 80
 board_pixels = square_size * 8
 

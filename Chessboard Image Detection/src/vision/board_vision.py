@@ -2,6 +2,12 @@ import numpy as np
 import src.vision.utils as utils
 from src.vision.chess_square import ChessSquare
 
+#  (\(\
+# ( -.-)
+# o_(")(")
+# This class holds the chess board's visual state.
+# It contains the images for each chess square and features related to them.
+
 class BoardVision:
     def __init__(self, coord, bot_is_white):
         self.coord = coord # Visual positions of each square in board
@@ -25,8 +31,10 @@ class BoardVision:
         files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
         ranks = [8, 7, 6, 5, 4, 3, 2, 1]
 
-        light_vals = []
-        dark_vals = []
+        light_bright = []
+        dark_bright = []
+        light_std = []
+        dark_std = []
 
         for row in range(8):
             for col in range(8):
@@ -41,15 +49,31 @@ class BoardVision:
 
                 # Calculate base light/dark colour
                 if row in [2, 3, 4, 5]:
-                    _, avg_brightness = utils.getSquareBrightness(square_img)
+                    _, avg_brightness, std = utils.getSquareFeatures(square_img)
                     if square_object.is_light_square:
-                        light_vals.append(avg_brightness)
+                        light_bright.append(avg_brightness)
+                        light_std.append(std)
                     else:
-                        dark_vals.append(avg_brightness)
+                        dark_bright.append(avg_brightness)
+                        dark_std.append(std)
+
+        # Convert lists to numpy arrays (prevents calculation error)
+        light_bright = np.array(light_bright)
+        dark_bright = np.array(dark_bright)
+        light_std = np.array(light_std)
+        dark_std = np.array(dark_std)
 
         # Calculate base profiles
-        self.light_profile = {'mean': np.mean(light_vals), 'std': max(np.std(light_vals), 2.0)}
-        self.dark_profile = {'mean': np.mean(dark_vals), 'std': max(np.std(dark_vals), 2.0)}
+        self.light_profile = {
+            'avg_bright': np.mean(light_bright), 
+            'std_bright': max(np.std(light_bright), 2.0),
+            'max_std': max(light_std)
+        }
+        self.dark_profile = {
+            'avg_bright': np.mean(dark_bright), 
+            'std_bright': max(np.std(dark_bright), 2.0),
+            'max_std': max(dark_std)
+        }
 
     def updateFrame(self, img):
         for row in range(8):
