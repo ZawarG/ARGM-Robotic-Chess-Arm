@@ -11,8 +11,9 @@ class ChessSquare: # responsibile for vision aspect
     def __init__(self, image, row, col, file, rank):
         self.image = image
 
+        self.coord = (row, col)
         file_int = ord(file) - 96
-        self.coord = f"{file}{rank}"
+        self.name = f"{file}{rank}"
         self.is_light_square = (file_int+rank) % 2 # 0 for dark, 1 for light
 
         # initialize piece info
