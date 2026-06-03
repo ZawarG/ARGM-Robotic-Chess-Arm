@@ -12,6 +12,7 @@ from src.hardware.robot import RobotController
 # This class handles the game engine/finite state machine.
 
 class GameState(Enum):
+    INITIALIZING = auto()
     HUMAN_MOVING = auto()
     ROBOT_MOVING = auto()
     ANIMATING_MOVE = auto()
@@ -27,7 +28,8 @@ class ChessBoard:
         # self.robot = RobotController()
 
         # State management
-        self.state = GameState.ROBOT_MOVING if bot_is_white else GameState.HUMAN_MOVING
+        self.bot_is_white = bot_is_white
+        self.state = GameState.INITIALIZING
         self.pending_push_move = None
         self.last_move_by_human = False
         
@@ -39,7 +41,7 @@ class ChessBoard:
         if self.state == GameState.ANIMATING_MOVE:
             self.__handleAnimating()
         else:
-            self.vis.update()
+            if hasattr(self, 'vis'): self.vis.update() #because i have self.vis commented
 
         if self.state == GameState.HUMAN_MOVING:
             self.__handleHumanMoving()
@@ -53,6 +55,14 @@ class ChessBoard:
         return None
 
     # FSM handlers
+    def __handleInitializing(self):
+        initial_occ = self.getEngineOccupancy()
+
+        observed_occ = self.vision.getObservedoccupancy()
+
+        if observed_occ == initial_occ:
+            self.state = GameState.ROBOT_MOVING if self.bot_is_white else GameState.HUMAN_MOVING
+
     def __handleAnimating(self):
         finished = self.vis.animate_move_by_frame() # returns true if move over
         
@@ -165,13 +175,15 @@ class ChessBoard:
     def getEngineOccupancy(self):
         occ = [[False for _ in range(8)] for _ in range(8)]
         
-        for square in chess.SQUARES:
-            piece = self.board.piece_at(square)
-            if piece:
-                row = 7 - (square // 8)
-                col = square % 8
+        for square_obj in self.vision.squares:
+            row, col = square_obj.coord
+            square_file_rank = square_obj.name[0], square_obj.name[1]
+            
+            chess_square = chess.parse_square(square_file_rank)
+
+            if self.board.piece_at(chess_square):
                 occ[row][col] = True
-                
+
         return occ
     
     # Detect changes

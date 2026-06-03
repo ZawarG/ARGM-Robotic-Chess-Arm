@@ -74,7 +74,7 @@ def displaySquares(vision):
             )
             
             # 4. Use internal naming (e.g., 'a8', 'h1')
-            ax.set_title(square.coord, fontsize=9, color='blue')
+            ax.set_title(square.name, fontsize=9, color='blue')
             ax.axis('off')
 
     
