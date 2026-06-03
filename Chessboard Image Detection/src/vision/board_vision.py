@@ -1,6 +1,7 @@
 import numpy as np
 import src.vision.utils as utils
 from src.vision.chess_square import ChessSquare
+import cv2
 
 #  (\(\
 # ( -.-)
@@ -67,12 +68,16 @@ class BoardVision:
         self.light_profile = {
             'avg_bright': np.mean(light_bright), 
             'std_bright': max(np.std(light_bright), 2.0),
-            'max_std': max(light_std)
+            # 'max_std': max(light_std),
+            'avg_std': np.mean(light_std),
+            'std_std': max(np.std(light_std), 2.0)
         }
         self.dark_profile = {
             'avg_bright': np.mean(dark_bright), 
             'std_bright': max(np.std(dark_bright), 2.0),
-            'max_std': max(dark_std)
+            # 'max_std': max(dark_std),
+            'avg_std': np.mean(dark_std),
+            'std_std': max(np.std(dark_std), 2.0)
         }
 
     def updateFrame(self, img):

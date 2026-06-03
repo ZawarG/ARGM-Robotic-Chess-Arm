@@ -167,21 +167,17 @@ def checkOccupancy(img, is_light, profile):
 
     # Brightness check (is square significantly lighter/darker than empty avg)
     if is_light:
-        # Dark on light square
+        # Light square
         if avg_brightness < profile['avg_bright'] - (2*profile['std_bright']):
-            print(f"Brightness triggered: {avg_brightness:.2f} < {profile['avg_bright'] - (2*profile['std_bright']):.2f}")
             triggered = True
     else:
-        # Light on dark square
+        # Dark square
         if avg_brightness > profile['avg_bright'] + (2*profile['std_bright']):
-            print(f"Brightness triggered: {avg_brightness:.2f} > {profile['avg_bright'] - (2*profile['std_bright']):.2f}")
             triggered = True
         
     # Texture/contrast check
-    if std > profile['max_std'] * 1.05:
+    if std > profile['avg_std'] + 1.8 * profile['std_std']:
+    # if std > profile['max_std'] * 1.05:
         triggered = True
-        print(
-            f"Occupied: std={std:.4f}, threshold={profile['max_std']*1.05:.4f}"
-        )
-        
+
     return triggered
