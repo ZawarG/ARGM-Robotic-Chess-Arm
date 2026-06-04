@@ -19,6 +19,8 @@ class BoardVision:
         self.occupancy_buffer = []
         self.M = None
 
+        self.warped_img = None
+
     def getSquare(self, img, row, col):
         top_left = self.coord[row, col] # top left coordinate of square
         bottom_right = self.coord[row+1,col+1] # bottom right coordinate of square
@@ -29,6 +31,7 @@ class BoardVision:
         return isolated_square
 
     def initializeBoard(self, img, M):
+        self.warped_img = img
         self.M = M
 
         files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
@@ -86,6 +89,7 @@ class BoardVision:
     def updateFrame(self, raw_img):
         img_small = utils.makeImageSmall(raw_img)
         img = utils.warpFrame(img_small, self.M)
+        self.warped_img = img
 
         for row in range(8):
             for col in range(8):

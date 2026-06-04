@@ -63,7 +63,7 @@ def runCalibration(img, model):
 
     return board_detected, coords, warped_img, M
 
-def testCode() :
+def testCode(model) :
     # USE_IMAGE = 0
 
     # if USE_IMAGE:
@@ -107,7 +107,7 @@ def testCode() :
 
         # Generate live overlay display using the latest warped frame and stabilized matrix
         # (Using game.vision.coord assuming your coordinates mapped to the warped resolution)
-        live_display = debugger.drawOccupancyOverlay(warped_img.copy(), game.vision.coord)
+        live_display = debugger.drawOccupancyOverlay(game.vision)
         
         # Show live video window
         cv2.imshow("Live Chess Matrix Tracker", live_display)
@@ -123,9 +123,9 @@ def testCode() :
             break
 
         # debugger.displaySquares(game.vision)
-        game.close()
-        cap.release()
-        cv2.destroyAllWindows()
+    game.close()
+    cap.release()
+    cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     USE_CAMERA = 0
@@ -134,4 +134,4 @@ if __name__ == "__main__":
         main()
     else: 
         model = YOLO("Chessboard Image Detection/models/best.pt")
-        testCode()
+        testCode(model)
