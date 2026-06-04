@@ -1,7 +1,6 @@
 import numpy as np
 import src.vision.utils as utils
 from src.vision.chess_square import ChessSquare
-import cv2
 
 #  (\(\
 # ( -.-)
@@ -13,11 +12,12 @@ class BoardVision:
     def __init__(self, coord, bot_is_white):
         self.coord = coord # Visual positions of each square in board
         self.squares = [[None for _ in range(8)] for _ in range(8)]
-        
         self.light_profile = None
         self.dark_profile = None
-
         self.bot_is_white = bot_is_white
+
+        self.occupancy_buffer = []
+        self.M = None
 
     def getSquare(self, img, row, col):
         top_left = self.coord[row, col] # top left coordinate of square
@@ -28,7 +28,9 @@ class BoardVision:
         ]
         return isolated_square
 
-    def initializeBoard(self, img):
+    def initializeBoard(self, img, M):
+        self.M = M
+
         files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
         ranks = [8, 7, 6, 5, 4, 3, 2, 1]
 
@@ -80,7 +82,11 @@ class BoardVision:
             'std_std': max(np.std(dark_std), 2.0)
         }
 
-    def updateFrame(self, img):
+    # Takes a raw unwarped video frame, crops and warps it, and extracts the squares
+    def updateFrame(self, raw_img):
+        img_small = utils.makeImageSmall(raw_img)
+        img = utils.warpFrame(img_small, self.M)
+
         for row in range(8):
             for col in range(8):
                 # Retrieve image
@@ -91,6 +97,34 @@ class BoardVision:
                 # Update image
                 self.squares[row][col].image = cropped_square
 
+    # Retrieves current frame occupancy, appends to history, returns mode of occupancy every 10 frames
+    # Otherwise, returns None
+    def getStabilizedOccupancy(self):
+        # current_frame_occ = [[False for _ in range(8)] for _ in range(8)]
+        # for row in range(8):
+        #     for col in range(8):
+        #         square = self.squares[row][col]
+        #         profile = self.light_profile if square.is_light_square else self.dark_profile
+        #         current_frame_occ[row][col] = square.isOccupied(profile)
+
+        current_frame_occ = self.getObservedOccupancy() # Retrieve occupancy for current frame
+
+        self.occupancy_buffer.append(current_frame_occ) # Push to buffer
+
+        if len(self.occupancy_buffer) < 10: # We have not reached 10 frames yet
+            return None
+        
+        # Find mode
+        array = np.array(self.occupancy_buffer)
+        sum_matrix = np.sum(array, axis = 0)
+        mode_matrix = (sum_matrix >= 5).tolist()
+
+        # Flush buffer
+        self.occupancy_buffer = []
+
+        return mode_matrix
+
+    # Retrieves current frame occupancy
     def getObservedOccupancy(self):
         observed = [[False for _ in range(8)] for _ in range(8)]
         for row in range(8):

@@ -19,17 +19,19 @@ class GameState(Enum):
     GAME_OVER = auto()
 
 class ChessBoard:
-    def __init__(self, coord, bot_is_white):
+    def __init__(self, coord, bot_is_white, warped_img, warped_corners):
         # Initialize components
         self.vision = BoardVision(coord, bot_is_white)
+        self.vision.initializeBoard(warped_img, warped_corners)
+
         self.board = chess.Board()
         self.engine = chess.engine.SimpleEngine.popen_uci("/opt/homebrew/bin/stockfish")
-        # self.vis = ChessVisualizer(self.board)
-        # self.robot = RobotController()
+        self.robot = RobotController()
+        self.visualizer = ChessVisualizer(self.board)
 
         # State management
         self.bot_is_white = bot_is_white
-        self.state = GameState.INITIALIZING
+        self.state = GameState.ROBOT_MOVING if self.bot_is_white else GameState.HUMAN_MOVING
         self.pending_push_move = None
         self.last_move_by_human = False
         
@@ -41,30 +43,20 @@ class ChessBoard:
         if self.state == GameState.ANIMATING_MOVE:
             self.__handleAnimating()
         else:
-            if hasattr(self, 'vis'): self.vis.update() #because i have self.vis commented
+            if hasattr(self, 'vis'): self.visualizer.update() #because i have self.vis commented
 
         if self.state == GameState.HUMAN_MOVING:
             self.__handleHumanMoving()
-            
         elif self.state == GameState.ROBOT_MOVING:
             self.__handleRobotMoving()
-
         elif self.state == GameState.GAME_OVER:
             return self.__handleGameOver()
 
         return None
 
     # FSM handlers
-    def __handleInitializing(self):
-        initial_occ = self.getEngineOccupancy()
-
-        observed_occ = self.vision.getObservedoccupancy()
-
-        if observed_occ == initial_occ:
-            self.state = GameState.ROBOT_MOVING if self.bot_is_white else GameState.HUMAN_MOVING
-
     def __handleAnimating(self):
-        finished = self.vis.animate_move_by_frame() # returns true if move over
+        finished = self.visualizer.animate_move_by_frame() # returns true if move over
         
         if finished and self.pending_push_move:
             # Push the move after animation
@@ -78,28 +70,19 @@ class ChessBoard:
                 # switch between human and robot
                 self.state = GameState.ROBOT_MOVING if self.last_move_by_human else GameState.HUMAN_MOVING
 
-    def __handleGameOver(self):
-        outcome = self.board.outcome()
-
-        self.close()
-
-        if outcome.winner == None:
-            winner = "Draw"
-        elif outcome.winner == self.bot_is_white: # outcome.winner is true if it's 
-            winner =  "Player"
-        else:
-            winner =  "Robot"
-        
-        # arduino.write(bytes('winner: ' + winner + '\n', 'utf-8')) 
-
-        return winner
-
     def __handleHumanMoving(self):
-        changed = self.getChangedSquares()
+        stabilized_observed = self.vision.getStabilizedOccupancy()
 
+        # Only look for human moves if stabilized
+        if stabilized_observed is None:
+            return
+
+        # Check for differences
+        changed = self.getChangedSquares(stabilized_observed)
         if not changed:
             return
 
+        # Turn differences into a legal chess move
         move = self.detectMove(changed)
 
         if move:
@@ -108,7 +91,7 @@ class ChessBoard:
             self.last_move_by_human = True
             self.pending_push_move = move  # store the move to push after animation finishes
             piece = self.board.piece_at(move.from_square)
-            self.vis.start_animation(piece.symbol(), move.from_square, move.to_square)
+            self.visualizer.start_animation(piece.symbol(), move.from_square, move.to_square)
             self.state = GameState.ANIMATING_MOVE 
 
         else:
@@ -128,8 +111,24 @@ class ChessBoard:
         self.last_move_by_human = False
         self.pending_push_move = move  # store the move to push after animation finishes
         piece = self.board.piece_at(move.from_square)
-        self.vis.start_animation(piece.symbol(), move.from_square, move.to_square)
+        self.visualizer.start_animation(piece.symbol(), move.from_square, move.to_square)
         self.state = GameState.ANIMATING_MOVE 
+
+    def __handleGameOver(self):
+        outcome = self.board.outcome()
+
+        self.close()
+
+        if outcome.winner == None:
+            winner = "Draw"
+        elif outcome.winner == self.bot_is_white: # outcome.winner is true if it's 
+            winner =  "Player"
+        else:
+            winner =  "Robot"
+        
+        # arduino.write(bytes('winner: ' + winner + '\n', 'utf-8')) 
+
+        return winner
 
     # Changed squares -> legal chess move
     def detectMove(self, changed):
@@ -187,19 +186,18 @@ class ChessBoard:
         return occ
     
     # Detect changes
-    def getChangedSquares(self):
-        observed = self.vision.getObservedOccupancy()
+    def getChangedSquares(self, stabilized_observed):
         engine_occ = self.getEngineOccupancy()
 
         changed = []
 
         for row in range(8):
             for col in range(8):
-                if observed[row][col] != engine_occ[row][col]:
+                if stabilized_observed[row][col] != engine_occ[row][col]:
                     changed.append((row, col))
 
         return changed
     
     def close(self):
         self.engine.quit()
-        # self.vis.quit()
+        # self.visualizer.quit()

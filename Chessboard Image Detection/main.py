@@ -59,42 +59,73 @@ def runCalibration(img, model):
         board_detected, corners = calibration.adjustImageManually(img_small)
         img_cropped = img_small
 
-    warped_img, coords = utils.getWarpedBoard(img_cropped, corners)
+    M, coords, warped_img = utils.runInitialCalibration(img_cropped, corners)
 
-    return board_detected, coords, warped_img
+    return board_detected, coords, warped_img, M
 
 def testCode() :
-    USE_IMAGE = 1
+    # USE_IMAGE = 0
 
-    if USE_IMAGE:
-        image_path = "Chessboard Image Detection/data/input/IMG_0302.jpg"
-        img = cv2.imread(image_path)
-    else:
-        video_path = "Chessboard Image Detection/data/videos/game.mp4"
-        cap = cv2.VideoCapture(video_path)
+    # if USE_IMAGE:
+    #     image_path = "Chessboard Image Detection/data/input/IMG_0302.jpg"
+    #     img = cv2.imread(image_path)
+    # else:
+    video_path = "Chessboard Image Detection/data/videos/game.mp4"
+    cap = cv2.VideoCapture(video_path)
 
-        # Grab the first frame for board localization
-        ret, img = cap.read()
-        if not ret:
-            print("Failed to read video")
-            return
+    # Grab the first frame for board localization
+    ret, img = cap.read()
+    if not ret:
+        print("Failed to read video")
+        return
 
     # Ask the user for their colour
     # player_colour = calibration.askPlayerColour()
-    playerIsBlack = True # Player is black
+    playerIsBlack = False # Player is black
 
     # Detect board
-    board_detected, board_coord, warped_img = runCalibration(img, model)
+    board_detected, board_coord, warped_img, M = runCalibration(img, model)
+
+    if board_detected is None:
+        return
 
     # Initialize game
-    if board_detected is not None:
-        # Create chess board object
-        game = ChessBoard(board_coord, playerIsBlack)
-        game.vision.initializeBoard(warped_img)
+    game = ChessBoard(board_coord, playerIsBlack, warped_img, M)
 
-        # Display for debugging
-        debugger.displaySquares(game.vision)
+    paused = False
+
+    while True:
+        # If not paused, capture a new frame and update the engine
+        if not paused:
+            ret, img = cap.read()
+            if not ret: 
+                break
+
+            winner = game.update(img)
+            if winner is not None:
+                print("game over")
+
+        # Generate live overlay display using the latest warped frame and stabilized matrix
+        # (Using game.vision.coord assuming your coordinates mapped to the warped resolution)
+        live_display = debugger.drawOccupancyOverlay(warped_img.copy(), game.vision.coord)
+        
+        # Show live video window
+        cv2.imshow("Live Chess Matrix Tracker", live_display)
+        
+        # Intercept keyboard keys
+        key = cv2.waitKey(1) & 0xFF
+        
+        if key == ord(' '):  # SPACEBAR toggles pause/play
+            paused = not paused
+            print("Status:", "PAUSED" if paused else "PLAYING")
+            
+        elif key == ord('q'):  # 'Q' quits the stream
+            break
+
+        # debugger.displaySquares(game.vision)
         game.close()
+        cap.release()
+        cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     USE_CAMERA = 0
