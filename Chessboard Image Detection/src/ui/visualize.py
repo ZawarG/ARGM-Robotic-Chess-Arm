@@ -1,7 +1,7 @@
 import pygame
 import chess
-import os
 from PIL import Image
+from pathlib import Path
 
 #  (\(\
 # ( -.-)
@@ -46,11 +46,11 @@ class ChessVisualizer:
         self.piece_images = {}
 
         # absolute path logic
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        image_dir = os.path.join(script_dir, 'data', 'game-visualizer-images')
+        script_dir = Path(__file__).resolve().parent
+        image_dir = script_dir.parent.parent / 'data' / 'game-visualizer-images'
 
         for symbol, name in symbol_to_name.items():
-            img_path = os.path.join(image_dir, f'{name}.png')
+            img_path = image_dir / f'{name}.png'
 
             try:
                 pil_img = Image.open(img_path).convert("RGBA")
@@ -66,7 +66,7 @@ class ChessVisualizer:
             except Exception as e:
                 print(f"PIL failed: {e}")
 
-            if not os.path.exists(img_path):
+            if not Path.exists(img_path):
                 raise FileNotFoundError(f"Could not find piece image: {img_path}")
             
             # print(f'Chessboard Image Detection/data/game-visualizer-images/{name}.png')

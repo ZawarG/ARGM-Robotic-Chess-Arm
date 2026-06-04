@@ -6,7 +6,8 @@ import numpy as np
 # o_(")(")
 # This file holds stateless helper functions related to computer vision
 
-def getWarpedBoard(img, source_pts, board_size=800):
+# Board warping
+def getPerspectiveMatrix(source_pts, board_size=800):
     dest_pts = np.array([
         [0, 0], 
         [board_size, 0], 
@@ -14,15 +15,9 @@ def getWarpedBoard(img, source_pts, board_size=800):
         [0, board_size]
     ], dtype="float32")
 
-    # Perspective transform matrix
-    M = cv2.getPerspectiveTransform(source_pts, dest_pts)
+    return cv2.getPerspectiveTransform(source_pts, dest_pts)
 
-    warped_img = cv2.warpPerspective(img, M, (board_size, board_size))
-
-    cv2.imshow("warped", warped_img)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-
+def generateGridCoordinates(board_size=800):
     # Generate 9x9 coordinates
     coords = np.zeros((9, 9, 2), dtype=np.float32)
     lin_space = np.linspace(0, board_size, 9)
@@ -31,8 +26,19 @@ def getWarpedBoard(img, source_pts, board_size=800):
         for col in range(9):
             coords[row, col] = [lin_space[col], lin_space[row]]
 
-    return warped_img, coords
+    return coords
 
+def warpFrame(img, M, board_size=800):
+    return cv2.warpPerspective(img, M, (board_size, board_size))
+
+def runInitialCalibration(img, source_pts, board_size=800):
+    M = getPerspectiveMatrix(source_pts, board_size)
+    coords = generateGridCoordinates(board_size)
+    warped_img = warpFrame(img, M, board_size)
+
+    return M, coords, warped_img
+
+# Square extraction
 def extractOuterCorners(corners):
     # Reshape 1D array to 3D grid[row][col][x,y]
     grid = corners.reshape(7,7,2)
@@ -62,6 +68,7 @@ def extractOuterCorners(corners):
 
     return np.array([top_left, top_right, bottom_right, bottom_left], dtype="float32")
 
+# Board detection
 def detectSquares(img):
     # Run detection algorithm
     board_detected, corners = cv2.findChessboardCorners(
@@ -146,6 +153,7 @@ def makeImageSmall(img):
     img_small = cv2.resize(img, (display_width, display_height))
     return img_small
 
+# Square occupancy
 def getSquareFeatures(img, border_ratio=0.33):
     # Crop
     height, width = img.shape[:2]
