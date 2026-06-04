@@ -19,14 +19,14 @@ class GameState(Enum):
     GAME_OVER = auto()
 
 class ChessBoard:
-    def __init__(self, coord, bot_is_white, warped_img, warped_corners):
+    def __init__(self, coord, bot_is_white, warped_img, M):
         # Initialize components
         self.vision = BoardVision(coord, bot_is_white)
-        self.vision.initializeBoard(warped_img, warped_corners)
+        self.vision.initializeBoard(warped_img, M)
 
         self.board = chess.Board()
         self.engine = chess.engine.SimpleEngine.popen_uci("/opt/homebrew/bin/stockfish")
-        self.robot = RobotController()
+        # self.robot = RobotController()
         self.visualizer = ChessVisualizer(self.board)
 
         # State management
@@ -106,7 +106,7 @@ class ChessBoard:
         move = result.move
 
         print("Robot played:", move)
-        self.robot.movePiece(move.from_square, move.to_square)
+        # self.robot.movePiece(move.from_square, move.to_square)
         
         self.last_move_by_human = False
         self.pending_push_move = move  # store the move to push after animation finishes
@@ -174,14 +174,15 @@ class ChessBoard:
     def getEngineOccupancy(self):
         occ = [[False for _ in range(8)] for _ in range(8)]
         
-        for square_obj in self.vision.squares:
-            row, col = square_obj.coord
-            square_file_rank = square_obj.name[0], square_obj.name[1]
-            
-            chess_square = chess.parse_square(square_file_rank)
+        for visual_row in self.vision.squares:
+            for square_obj in visual_row:
+                row, col = square_obj.coord
+                square_file_rank = square_obj.name
+                
+                chess_square = chess.parse_square(square_file_rank)
 
-            if self.board.piece_at(chess_square):
-                occ[row][col] = True
+                if self.board.piece_at(chess_square):
+                    occ[row][col] = True
 
         return occ
     

@@ -10,34 +10,66 @@ from src.vision import utils
 # Each square is surrounded by either a red (occupied) or green (empty) border
 
 # Draws a red (occupied) or green (empty) for each square on top of the warped image
-def drawOccupancyOverlay(warped_img, coords, stabilized_matrix):
-    # Create a copy to blend transparently
-    overlay = warped_img.copy()
+def drawOccupancyOverlay(board_vision):
+    """
+    Draws the grid lines and occupancy status on the warped board image.
     
-    for row in range(8):
-        for col in range(8):
-            # Get bounding corners for the current square
-            top_left = coords[row, col].astype(int)
-            bottom_right = coords[row+1, col+1].astype(int)
-            
-            # Determine color based on occupancy matrix (BGR format)
-            is_occupied = stabilized_matrix[row][col] if stabilized_matrix else False
-            color = (0, 0, 255) if is_occupied else (0, 255, 0) # Red if True, Green if False
-            
-            # Draw solid rectangle on overlay copy
-            cv2.rectangle(overlay, tuple(top_left), tuple(bottom_right), color, -1)
-            
-            # Optional: Label the square coordinate (e.g., "a8")
-            # Text position slightly offset from top-left corner
-            text_pos = (top_left[0] + 5, top_left[1] + 20)
-            cv2.putText(warped_img, f"{row},{col}", text_pos, 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+    :param img: A copy of the current warped frame (e.g., 800x800).
+    :param coords: The 9x9 numpy array of grid intersection points.
+    :param board_vision: Optional. Pass game.vision to dynamically show 
+                         Green (Empty) or Red (Occupied) states.
+    :return: The annotated image frame.
+    """
 
-    # Blend the original image and the colored overlay (0.7 original, 0.3 colored layer)
-    alpha = 0.3
-    output_img = cv2.addWeighted(overlay, alpha, warped_img, 1 - alpha, 0)
-    
-    return output_img
+    img = board_vision.warped_img
+    coords = board_vision.coord
+
+    # 1. Draw the 9x9 Grid Lines
+    # Loop through rows and columns to connect the intersection points
+    for i in range(9):
+        # Draw horizontal lines: connect (row i, col 0) to (row i, col 8)
+        pt_start_h = tuple(coords[i, 0].astype(int))
+        pt_end_h = tuple(coords[i, 8].astype(int))
+        cv2.line(img, pt_start_h, pt_end_h, (255, 0, 0), 2) # Blue lines
+
+        # Draw vertical lines: connect (row 0, col i) to (row 8, col i)
+        pt_start_v = tuple(coords[0, i].astype(int))
+        pt_end_v = tuple(coords[8, i].astype(int))
+        cv2.line(img, pt_start_v, pt_end_v, (255, 0, 0), 2) # Blue lines
+
+    # 2. Draw Occupancy Status Indicators (If vision data is provided)
+    if board_vision is not None:
+        for row in range(8):
+            for col in range(8):
+                # Get corner coordinates of the current square
+                top_left = coords[row, col]
+                bottom_right = coords[row + 1, col + 1]
+                
+                # Calculate the center point of the square to place our indicator
+                center_x = int((top_left[0] + bottom_right[0]) / 2)
+                center_y = int((top_left[1] + bottom_right[1]) / 2)
+                center_pt = (center_x, center_y)
+
+                # Check if the square object exists and see if it's occupied
+                square = board_vision.squares[row][col]
+                if square is not None:
+                    profile = board_vision.light_profile if square.is_light_square else board_vision.dark_profile
+                    
+                    # Call the occupancy check function from your utils/square logic
+                    is_occupied = square.isOccupied(profile) 
+                    
+                    # BGR Colors: Red if occupied, Green if empty
+                    color = (0, 0, 255) if is_occupied else (0, 255, 0)
+                    
+                    # Draw a solid circle at the center of the square
+                    cv2.circle(img, center_pt, 8, color, -1)
+                    
+                    # Optional: Overlay text showing the chess notation (e.g., "e4")
+                    label = square.name
+                    cv2.putText(img, label, (center_x - 10, center_y + 20), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+
+    return img
 
 
 # Display each square on matplotlib
