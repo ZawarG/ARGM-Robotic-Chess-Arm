@@ -64,68 +64,84 @@ def runCalibration(img, model):
     return board_detected, coords, warped_img, M
 
 def testCode(model) :
-    # USE_IMAGE = 0
+    USE_IMAGE = 0
 
-    # if USE_IMAGE:
-    #     image_path = "Chessboard Image Detection/data/input/IMG_0302.jpg"
-    #     img = cv2.imread(image_path)
-    # else:
-    video_path = "Chessboard Image Detection/data/videos/game.mp4"
-    cap = cv2.VideoCapture(video_path)
+    if USE_IMAGE:
+        image_path = "Chessboard Image Detection/data/input/IMG_0302.jpg"
+        img = cv2.imread(image_path)
 
-    # Grab the first frame for board localization
-    ret, img = cap.read()
-    if not ret:
-        print("Failed to read video")
-        return
+        playerIsBlack = False # Player is black
 
-    # Ask the user for their colour
-    # player_colour = calibration.askPlayerColour()
-    playerIsBlack = False # Player is black
+        # Detect board
+        board_detected, board_coord, warped_img, M = runCalibration(img, model)
 
-    # Detect board
-    board_detected, board_coord, warped_img, M = runCalibration(img, model)
+        if board_detected is None:
+            return
+        
+        # Initialize game
+        game = ChessBoard(board_coord, playerIsBlack, warped_img, M)
 
-    if board_detected is None:
-        return
+        debugger.displaySquares(game.vision)
 
-    # Initialize game
-    game = ChessBoard(board_coord, playerIsBlack, warped_img, M)
+    else:
+        video_path = "Chessboard Image Detection/data/videos/game.mp4"
+        cap = cv2.VideoCapture(video_path)
 
-    paused = False
+        # Grab the first frame for board localization
+        ret, img = cap.read()
+        if not ret:
+            print("Failed to read video")
+            return
 
-    while True:
-        # If not paused, capture a new frame and update the engine
-        if not paused:
-            ret, img = cap.read()
-            if not ret: 
+        # Ask the user for their colour
+        # player_colour = calibration.askPlayerColour()
+        playerIsBlack = True # Player is black
+
+        # Detect board
+        board_detected, board_coord, warped_img, M = runCalibration(img, model)
+
+        if board_detected is None:
+            return
+
+        # Initialize game
+        game = ChessBoard(board_coord, playerIsBlack, warped_img, M)
+
+        paused = False
+
+        while True:
+            # If not paused, capture a new frame and update the engine
+            if not paused:
+                ret, img = cap.read()
+                if not ret: 
+                    break
+
+                winner = game.update(img)
+                if winner is not None:
+                    print("game over")
+
+            # Generate live overlay display using the latest warped frame and stabilized matrix
+            live_display = debugger.drawOccupancyOverlay(game.vision)
+            
+            # Show live video window
+            cv2.imshow("Live Chess Matrix Tracker", live_display)
+            
+            # Intercept keyboard keys
+            key = cv2.waitKey(60) & 0xFF
+            # key = cv2.waitKey(20) & 0xFF
+
+            # paused = True
+            
+            if key == ord(' '):  # SPACEBAR toggles pause/play
+                paused = not paused
+                print("Status:", "PAUSED" if paused else "PLAYING")
+                
+            elif key == ord('q'):  # 'Q' quits the stream
                 break
 
-            winner = game.update(img)
-            if winner is not None:
-                print("game over")
-
-        # Generate live overlay display using the latest warped frame and stabilized matrix
-        # (Using game.vision.coord assuming your coordinates mapped to the warped resolution)
-        live_display = debugger.drawOccupancyOverlay(game.vision)
-        
-        # Show live video window
-        cv2.imshow("Live Chess Matrix Tracker", live_display)
-        
-        # Intercept keyboard keys
-        key = cv2.waitKey(1) & 0xFF
-        
-        if key == ord(' '):  # SPACEBAR toggles pause/play
-            paused = not paused
-            print("Status:", "PAUSED" if paused else "PLAYING")
-            
-        elif key == ord('q'):  # 'Q' quits the stream
-            break
-
-        # debugger.displaySquares(game.vision)
-    game.close()
-    cap.release()
-    cv2.destroyAllWindows()
+            # debugger.displaySquares(game.vision)
+        game.close()
+        cap.release()
+        cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     USE_CAMERA = 0

@@ -29,3 +29,11 @@ Step 3: Check occupancy of each square:
     Otherwise, detect based on the standard deviation of colours in the square
     Validation check: Blur and search for edges on detected occupied squares. If they do not exist, mark the square as unoccupied
 
+*Edits*
+Using brightness for lighting differences
+Using std for rough texture variation
+Problem: std and mean are sensitive to reflections, shadows, camera exposure changes
+
+Possible solutions:
+Using sobel gradients for edges (it's possible to pinpoint just horizontal edges, which may be helpful since the wood grain is vertical)
+Using local binary pattern to check variation in brightness (resistant to brightness changes)

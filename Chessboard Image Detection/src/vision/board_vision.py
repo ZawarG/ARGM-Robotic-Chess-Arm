@@ -20,6 +20,7 @@ class BoardVision:
         self.M = None
 
         self.warped_img = None
+        self.curr_frame_bright = None
 
     def getSquare(self, img, row, col):
         top_left = self.coord[row, col] # top left coordinate of square
@@ -41,6 +42,10 @@ class BoardVision:
         dark_bright = []
         light_std = []
         dark_std = []
+        light_squares = []
+        dark_squares = []
+        light_contour_area = []
+        dark_contour_area = []
 
         for row in range(8):
             for col in range(8):
@@ -55,34 +60,49 @@ class BoardVision:
 
                 # Calculate base light/dark colour
                 if row in [2, 3, 4, 5]:
-                    _, avg_brightness, std = utils.getSquareFeatures(square_img)
+                    crop_img, avg_brightness, std = utils.getSquareFeatures(square_img)
+
                     if square_object.is_light_square:
                         light_bright.append(avg_brightness)
                         light_std.append(std)
+                        light_squares.append(crop_img)
                     else:
                         dark_bright.append(avg_brightness)
                         dark_std.append(std)
+                        dark_squares.append(crop_img)
 
         # Convert lists to numpy arrays (prevents calculation error)
         light_bright = np.array(light_bright)
         dark_bright = np.array(dark_bright)
         light_std = np.array(light_std)
         dark_std = np.array(dark_std)
+        light_squares = np.array(light_squares)
+        dark_squares = np.array(dark_squares)
+        light_contour_area = np.array(light_contour_area)
+        dark_contour_area = np.array(dark_contour_area)
 
         # Calculate base profiles
         self.light_profile = {
-            'avg_bright': np.mean(light_bright), 
-            'std_bright': max(np.std(light_bright), 2.0),
-            # 'max_std': max(light_std),
+            'avg_bright': np.mean(light_bright),
+            'std_bright': max(np.std(light_bright), 1.0),
             'avg_std': np.mean(light_std),
-            'std_std': max(np.std(light_std), 2.0)
+            'std_std': max(np.std(light_std), 1.0),
+            'avg_sq': np.mean(light_squares, axis=0).astype(np.uint8),
+            'std_sq': np.maximum(np.std(light_squares, axis=0), 1e-7),
+            # 'avg_contour_area': np.mean(),
+            # 'std_contour_area': max(np.std(), 0.1)
+            'start_frame_bright': np.mean(img)
         }
         self.dark_profile = {
             'avg_bright': np.mean(dark_bright), 
-            'std_bright': max(np.std(dark_bright), 2.0),
-            # 'max_std': max(dark_std),
+            'std_bright': max(np.std(dark_bright), 1.0),
             'avg_std': np.mean(dark_std),
-            'std_std': max(np.std(dark_std), 2.0)
+            'std_std': max(np.std(dark_std), 1.0),
+            'avg_sq': np.mean(dark_squares, axis=0).astype(np.uint8),
+            'std_sq': np.maximum(np.std(dark_squares, axis=0), 1e-7),
+            # 'avg_contour_area': np.mean(),
+            # 'std_contour_area': max(np.std(), 0.1)
+            'start_frame_bright': np.mean(img)
         }
 
     # Takes a raw unwarped video frame, crops and warps it, and extracts the squares
@@ -90,6 +110,8 @@ class BoardVision:
         img_small = utils.makeImageSmall(raw_img)
         img = utils.warpFrame(img_small, self.M)
         self.warped_img = img
+
+        self.curr_frame_bright = np.mean(img)
 
         for row in range(8):
             for col in range(8):
@@ -103,7 +125,7 @@ class BoardVision:
 
     # Retrieves current frame occupancy, appends to history, returns mode of occupancy every 10 frames
     # Otherwise, returns None
-    def getStabilizedOccupancy(self):
+    def getStabilizedOccupancy(self, STABILITY_THRESHOLD=15):
         # current_frame_occ = [[False for _ in range(8)] for _ in range(8)]
         # for row in range(8):
         #     for col in range(8):
@@ -115,7 +137,7 @@ class BoardVision:
 
         self.occupancy_buffer.append(current_frame_occ) # Push to buffer
 
-        if len(self.occupancy_buffer) < 10: # We have not reached 10 frames yet
+        if len(self.occupancy_buffer) < STABILITY_THRESHOLD: # We have not reached the required stable frames yet
             return None
         
         # Find mode
@@ -135,6 +157,6 @@ class BoardVision:
             for col in range(8):
                 square = self.squares[row][col]
                 profile = self.light_profile if square.is_light_square else self.dark_profile
-                observed[row][col] = square.isOccupied(profile)
+                observed[row][col] = square.isOccupied(profile, self.curr_frame_bright)
         
         return observed

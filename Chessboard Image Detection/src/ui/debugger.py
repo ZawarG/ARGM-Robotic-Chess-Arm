@@ -2,6 +2,7 @@ import cv2
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from src.vision import utils
+import numpy as np
 
 #  (\(\
 # ( -.-)
@@ -23,6 +24,7 @@ def drawOccupancyOverlay(board_vision):
 
     img = board_vision.warped_img
     coords = board_vision.coord
+    curr_frame_bright = board_vision.curr_frame_bright
 
     # 1. Draw the 9x9 Grid Lines
     # Loop through rows and columns to connect the intersection points
@@ -56,7 +58,7 @@ def drawOccupancyOverlay(board_vision):
                     profile = board_vision.light_profile if square.is_light_square else board_vision.dark_profile
                     
                     # Call the occupancy check function from your utils/square logic
-                    is_occupied = square.isOccupied(profile) 
+                    is_occupied = square.isOccupied(profile, curr_frame_bright) 
                     
                     # BGR Colors: Red if occupied, Green if empty
                     color = (0, 0, 255) if is_occupied else (0, 255, 0)
@@ -77,6 +79,7 @@ def displaySquares(vision):
     stabilized_matrix = None
     for _ in range(10):
         stabilized_matrix = vision.getStabilizedOccupancy()
+    curr_frame_bright = vision.curr_frame_bright
 
     # Create 8x8 figure
     fig, axes = plt.subplots(8, 8, figsize=(7, 7))
@@ -106,8 +109,20 @@ def displaySquares(vision):
             profile = light_prof if square.is_light_square else dark_prof
             
             # Call isOccupied using the synced profiles
-            occupied = square.isOccupied(profile)
+            occupied = square.isOccupied(profile, curr_frame_bright)
             color = 'red' if occupied else 'green'
+
+            bright_z = abs(
+                bright_val - profile['avg_bright']
+            ) / max(profile['std_bright'], 1)
+
+            std_z = abs(
+                std_val - profile['avg_std']
+            ) / max(profile['std_std'], 1)
+
+            z = np.abs(gray.astype(np.float32) - profile['avg_sq']) / (profile['std_sq'] + 1)
+
+            fill = utils.detectContourArea(gray, z)
 
             # 3. Visual Feedback
             rect = patches.Rectangle(
@@ -120,13 +135,14 @@ def displaySquares(vision):
             )
             ax.add_patch(rect)
 
-            # Display std, bright
+            # Display features
             ax.text(
                 0.5,
                 0.08,
                 (
-                    f"STD: {std_val:.2f}\n" 
-                    f"B: {bright_val:.1f}"
+                    f"Bz:{bright_z:.1f}\n"
+                    f"Sz:{std_z:.1f}\n"
+                    f"F:{fill:.2f}"
                 ),
                 transform=ax.transAxes,
                 ha='center',
@@ -144,9 +160,6 @@ def displaySquares(vision):
             ax.set_title(square.name, fontsize=9, color='blue')
             ax.axis('off')
 
-    
-    # light_std = (light_prof.get('max_std'))
-    # dark_std = (dark_prof.get('max_std'))
     light_avgstd= (light_prof.get('avg_std'))
     dark_avgstd = (dark_prof.get('avg_std'))
     light_std = (light_prof.get('std_std'))
@@ -156,19 +169,16 @@ def displaySquares(vision):
     light_bstd = (light_prof.get('std_bright'))
     dark_bstd = (dark_prof.get('std_bright'))
 
-    plt.figtext(
-        0.5,
-        0.02,
-        (
-            f"Light std min: {(light_avgstd):.2f}    |    Dark std min: {(dark_avgstd):.2f}\n"
-            f"Light std max: {(light_avgstd*1.8):.2f}    |    Dark std max: {(dark_avgstd+dark_std*1.8):.2f}\n"
-            # f"Light profile std: {light_std:.2f}    |    Dark profile std: {dark_std:.2f}\n"
-            f"Light brightness min: {(light_bright-2*light_bstd):.2f}    |    Dark brightness min: {(dark_bright-dark_bstd):.2f}\n"
-            f"Light brightness max: {(light_bright+2*light_bstd):.2f}    |    Dark brightness max: {(dark_bright+dark_bstd):.2f}"
-        ),
-        ha='center',
-        fontsize=12
-    )
+    # plt.figtext(
+    #     0.5,
+    #     0.02,
+    #     (
+    #         f"Light std min: {(light_avgstd+light_std*1.8):.2f}    |    Dark std min: {(dark_avgstd+dark_std*1.8):.2f}\n"
+    #         f"Light brightness max: {(light_bright-2*light_bstd):.2f}    |    Dark brightness min: {(dark_bright-2*dark_bstd):.2f}\n"
+    #     ),
+    #     ha='center',
+    #     fontsize=12
+    # )
 
     plt.tight_layout(rect=[0, 0.12, 1, 1])
     plt.show()
