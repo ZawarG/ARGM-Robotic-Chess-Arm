@@ -22,5 +22,5 @@ class ChessSquare: # responsibile for vision aspect
     def setReference(self, value):
         self.base_profile = value
         
-    def isOccupied(self, profile):
-        return utils.checkOccupancy(self.image, self.is_light_square, profile)
+    def isOccupied(self, profile, curr_frame_bright):
+        return utils.checkOccupancy(self.image, self.is_light_square, profile, curr_frame_bright)
