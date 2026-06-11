@@ -119,26 +119,26 @@ def testCode(model) :
                 if winner is not None:
                     print("game over")
 
-            # Generate live overlay display using the latest warped frame and stabilized matrix
-            live_display = debugger.drawOccupancyOverlay(game.vision)
+            # # Generate live overlay display using the latest warped frame and stabilized matrix
+            # live_display = debugger.drawOccupancyOverlay(game.vision)
             
-            # Show live video window
-            cv2.imshow("Live Chess Matrix Tracker", live_display)
+            # # Show live video window
+            # cv2.imshow("Live Chess Matrix Tracker", live_display)
             
-            # Intercept keyboard keys
-            key = cv2.waitKey(60) & 0xFF
-            # key = cv2.waitKey(20) & 0xFF
+            # # Intercept keyboard keys
+            # key = cv2.waitKey(60) & 0xFF
+            # # key = cv2.waitKey(20) & 0xFF
 
-            # paused = True
+            # # paused = True
             
-            if key == ord(' '):  # SPACEBAR toggles pause/play
-                paused = not paused
-                print("Status:", "PAUSED" if paused else "PLAYING")
+            # if key == ord(' '):  # SPACEBAR toggles pause/play
+            #     paused = not paused
+            #     print("Status:", "PAUSED" if paused else "PLAYING")
                 
-            elif key == ord('q'):  # 'Q' quits the stream
-                break
+            # elif key == ord('q'):  # 'Q' quits the stream
+            #     break
 
-            # debugger.displaySquares(game.vision)
+            debugger.displaySquares(game.vision)
         game.close()
         cap.release()
         cv2.destroyAllWindows()

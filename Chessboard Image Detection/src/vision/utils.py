@@ -160,8 +160,8 @@ def getSquareFeatures(img, border_ratio=0.1):
     # Crop
     height, width = img.shape[:2]
     b_top_height = int(height * border_ratio)
-    b_bot_height = int(height * border_ratio * 2) #  Double crop at bottom to account for how piece tops overlapping due camera angle
-    b_width = int(width * border_ratio / 2) # Half crop on sides
+    b_bot_height = int(height * border_ratio * 3) #  Double crop at bottom to account for how piece tops overlapping due camera angle
+    b_width = int(width * border_ratio)
     img = img[b_top_height:height-b_bot_height, b_width:width-b_width] 
 
     # cv2.imshow("crop", img)
@@ -174,53 +174,29 @@ def getSquareFeatures(img, border_ratio=0.1):
 
     return gray, avg_brightness, std
 
-def checkOccupancy(square, is_light, profile, curr_frame_bright):
-    triggered = False
-
-    gray, avg_brightness, std = getSquareFeatures(square)
+def checkOccupancy(square, profile, curr_frame_bright, curr_occ, name, FILL_THRESH = 0.03):
+    gray, _, _ = getSquareFeatures(square)
 
     # Retrieve brightness offset
     start_frame_bright = profile['start_frame_bright']
     brightness_offset = curr_frame_bright - start_frame_bright # Accounts for exposure changes during game
 
     # Retrieve profile variables
-    avg_bright = profile['avg_bright'] + brightness_offset
-    std_bright = profile['std_bright']
-    avg_std = profile['avg_std']
-    std_std = profile['std_std']
     avg_sq = profile['avg_sq'] + brightness_offset
     std_sq = profile['std_sq']
     
-    # # Calculate z-scores
-    # brightness_z = (avg_bright - avg_brightness) / std_bright
-    # texture_z = (std - avg_std) / std_std
+    # Calculate z-score
     fill_z = np.abs(gray.astype(np.float32) - avg_sq) / (std_sq + 1)
-
-    # # Check if z scores are within correct range
-    # bright_trigger = brightness_z < 2
-    # texture_trigger = texture_z > 3
-    # triggered = bright_trigger or texture_trigger
-
-    # Brightness check (is square significantly lighter/darker than empty avg)
-    if is_light:
-        # Light square
-        if avg_brightness < avg_bright - (2*std_bright):
-            triggered = True
-    else:
-        # Dark square
-        if avg_brightness > avg_bright + (2*std_bright):
-            triggered = True
-        
-    # Texture/contrast check
-    if std > avg_std + 1.8 * std_std:
-        triggered = True
 
     # Detect contour area and shape
     fill_ratio = detectContourArea(gray, fill_z)
 
-    return fill_ratio > 0.05
+    # if name=='h6':
+    #     print(fill_ratio, fill_ratio>0.05)
 
-    return triggered
+    print(name,fill_ratio, fill_ratio>FILL_THRESH)
+
+    return fill_ratio > FILL_THRESH
 
 def detectContourArea(square, z):
     # diff = cv2.absdiff(square, avg_sq) # first find which pixels changed compared to the empty square
@@ -248,6 +224,10 @@ def detectContourArea(square, z):
     # overlay = cv2.cvtColor(square, cv2.COLOR_GRAY2RGB)
 
     # print(mask.shape, overlay.shape)
+    # h = mask.shape[0]
+
+    # bottom_half_fill = np.count_nonzero(mask[h//2:, :]) / mask[h//2:, :].size
+    # top_half_fill = np.count_nonzero(mask[:h//2, :]) / mask[:h//2, :].size
 
     # overlay[mask > 0] = [255, 0, 0]
 
@@ -257,7 +237,7 @@ def detectContourArea(square, z):
     # ax[0].set_title("Square")
 
     # ax[1].imshow(mask, cmap='gray')
-    # ax[1].set_title(f"Mask\nFill={fill_ratio:.3f}")
+    # ax[1].set_title(f"Mask\nFill={fill_ratio:.3f}\n{bottom_half_fill:.3f}\n{top_half_fill:.3f}")
 
     # ax[2].imshow(overlay)
     # ax[2].set_title("Foreground Overlay")
@@ -269,43 +249,4 @@ def detectContourArea(square, z):
     # plt.show()
 
     return fill_ratio
-
-    # _, mask = cv2.threshold( # threshold the difference image (this basically removes the background before we detect)
-    #     diff,
-    #     30,      # threshold value
-    #     255,
-    #     cv2.THRESH_BINARY
-    # )
-
-    # contours, _ = cv2.findContours(
-    #     mask,
-    #     cv2.RETR_EXTERNAL,
-    #     cv2.CHAIN_APPROX_SIMPLE
-    # )
-
-    # areas = [cv2.contourArea(cnt) for cnt in contours]
-
-    # largest_area = max(areas) if areas else 0
-
-    # print("Largest contour area:", largest_area)
-
-    # square_area = square.shape[0] * square.shape[1]
-
-    # fill_ratio = largest_area / square_area
-
-    # print(fill_ratio)
-
-    # debug = cv2.cvtColor(square, cv2.COLOR_GRAY2BGR)
-
-    # cv2.drawContours(
-    #     debug,
-    #     contours,
-    #     -1,
-    #     (0, 255, 0),
-    #     2
-    # )
-
-    # cv2.imshow("Contours", debug)
-
-    # cv2.waitKey(0)
 

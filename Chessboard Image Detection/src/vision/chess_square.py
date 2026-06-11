@@ -17,10 +17,19 @@ class ChessSquare: # responsibile for vision aspect
         self.is_light_square = (file_int+rank) % 2 # 0 for dark, 1 for light
 
         # initialize piece info
-        self.occupied = False # from image analysis
+        self.occupied = True # Initialized in board_vision
 
     def setReference(self, value):
         self.base_profile = value
+
+    def setOccupancy(self, value):
+        self.occupied = value
+
+    def setImage(self, value):
+        self.image = value
         
-    def isOccupied(self, profile, curr_frame_bright):
-        return utils.checkOccupancy(self.image, self.is_light_square, profile, curr_frame_bright)
+    def updateOccupancy(self, profile, curr_frame_bright):
+        self.occupancy = utils.checkOccupancy(self.image, profile, curr_frame_bright, self.occupied, self.name)
+        
+    def getOccupancy(self):
+        return self.occupancy

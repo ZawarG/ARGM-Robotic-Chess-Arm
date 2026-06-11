@@ -12,16 +12,6 @@ import numpy as np
 
 # Draws a red (occupied) or green (empty) for each square on top of the warped image
 def drawOccupancyOverlay(board_vision):
-    """
-    Draws the grid lines and occupancy status on the warped board image.
-    
-    :param img: A copy of the current warped frame (e.g., 800x800).
-    :param coords: The 9x9 numpy array of grid intersection points.
-    :param board_vision: Optional. Pass game.vision to dynamically show 
-                         Green (Empty) or Red (Occupied) states.
-    :return: The annotated image frame.
-    """
-
     img = board_vision.warped_img
     coords = board_vision.coord
     curr_frame_bright = board_vision.curr_frame_bright
@@ -55,10 +45,8 @@ def drawOccupancyOverlay(board_vision):
                 # Check if the square object exists and see if it's occupied
                 square = board_vision.squares[row][col]
                 if square is not None:
-                    profile = board_vision.light_profile if square.is_light_square else board_vision.dark_profile
-                    
                     # Call the occupancy check function from your utils/square logic
-                    is_occupied = square.isOccupied(profile, curr_frame_bright) 
+                    is_occupied = square.getOccupancy() 
                     
                     # BGR Colors: Red if occupied, Green if empty
                     color = (0, 0, 255) if is_occupied else (0, 255, 0)
@@ -92,7 +80,6 @@ def displaySquares(vision):
             ax = axes[i, j]
             square = vision.squares[i][j]
             
-            # 1. Handle Image
             img = square.image
             if img is None or img.size == 0:
                 ax.axis('off')
@@ -101,27 +88,14 @@ def displaySquares(vision):
             img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             ax.imshow(img_rgb)
 
-            # Get std
-            gray, bright_val, std_val = utils.getSquareFeatures(img)
-
-            # 2. Sync Occupancy Detection
-            # We determine which profile to pass based on the square's color
+            gray, _, _ = utils.getSquareFeatures(img)
             profile = light_prof if square.is_light_square else dark_prof
-            
-            # Call isOccupied using the synced profiles
-            occupied = square.isOccupied(profile, curr_frame_bright)
+            occupied = square.getOccupancy()
             color = 'red' if occupied else 'green'
 
-            bright_z = abs(
-                bright_val - profile['avg_bright']
-            ) / max(profile['std_bright'], 1)
+            brightness_offset = vision.curr_frame_bright - profile['start_frame_bright']
 
-            std_z = abs(
-                std_val - profile['avg_std']
-            ) / max(profile['std_std'], 1)
-
-            z = np.abs(gray.astype(np.float32) - profile['avg_sq']) / (profile['std_sq'] + 1)
-
+            z = np.abs(gray.astype(np.float32) - profile['avg_sq'] - brightness_offset) / (profile['std_sq'] + 1) 
             fill = utils.detectContourArea(gray, z)
 
             # 3. Visual Feedback
@@ -140,8 +114,6 @@ def displaySquares(vision):
                 0.5,
                 0.08,
                 (
-                    f"Bz:{bright_z:.1f}\n"
-                    f"Sz:{std_z:.1f}\n"
                     f"F:{fill:.2f}"
                 ),
                 transform=ax.transAxes,
@@ -160,26 +132,6 @@ def displaySquares(vision):
             ax.set_title(square.name, fontsize=9, color='blue')
             ax.axis('off')
 
-    light_avgstd= (light_prof.get('avg_std'))
-    dark_avgstd = (dark_prof.get('avg_std'))
-    light_std = (light_prof.get('std_std'))
-    dark_std = (dark_prof.get('std_std'))
-    light_bright= (light_prof.get('avg_bright'))
-    dark_bright = (dark_prof.get('avg_bright'))
-    light_bstd = (light_prof.get('std_bright'))
-    dark_bstd = (dark_prof.get('std_bright'))
-
-    # plt.figtext(
-    #     0.5,
-    #     0.02,
-    #     (
-    #         f"Light std min: {(light_avgstd+light_std*1.8):.2f}    |    Dark std min: {(dark_avgstd+dark_std*1.8):.2f}\n"
-    #         f"Light brightness max: {(light_bright-2*light_bstd):.2f}    |    Dark brightness min: {(dark_bright-2*dark_bstd):.2f}\n"
-    #     ),
-    #     ha='center',
-    #     fontsize=12
-    # )
-
-    plt.tight_layout(rect=[0, 0.12, 1, 1])
+    plt.tight_layout()
     plt.show()
 
