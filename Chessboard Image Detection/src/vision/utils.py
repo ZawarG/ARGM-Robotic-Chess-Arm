@@ -156,7 +156,7 @@ def makeImageSmall(img):
     return img_small
 
 # Square occupancy
-def getSquareFeatures(img, border_ratio=0.1):
+def adjustSquare(img, border_ratio=0.1):
     # Crop
     height, width = img.shape[:2]
     b_top_height = int(height * border_ratio)
@@ -164,17 +164,13 @@ def getSquareFeatures(img, border_ratio=0.1):
     b_width = int(width * border_ratio)
     img = img[b_top_height:height-b_bot_height, b_width:width-b_width] 
 
-    # cv2.imshow("crop", img)
-    # cv2.waitKey(0)
-
     # Detect average brightness and std
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    avg_brightness = np.mean(gray)
 
-    return gray, avg_brightness
+    return gray
 
 def checkOccupancy(square, profile, name, FILL_THRESH = 0.03):
-    gray, _, = getSquareFeatures(square)
+    gray = adjustSquare(square)
 
     # Retrieve brightness offset
     start_frame_bright = profile['avg_bright']

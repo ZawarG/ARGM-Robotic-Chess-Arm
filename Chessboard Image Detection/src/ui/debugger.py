@@ -86,7 +86,7 @@ def displaySquares(vision):
             img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             ax.imshow(img_rgb)
 
-            gray, _ = utils.getSquareFeatures(img)
+            gray = utils.adjustSquare(img)
             profile = light_prof if square.is_light_square else dark_prof
             occupied = square.getOccupancy()
             color = 'red' if occupied else 'green'

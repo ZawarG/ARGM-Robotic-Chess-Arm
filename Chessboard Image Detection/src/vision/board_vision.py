@@ -19,7 +19,7 @@ class BoardVision:
         self.M = None
         self.warped_img = None
 
-    def getSquare(self, img, row, col):
+    def _getSquareImage(self, img, row, col):
         top_left = self.coord[row, col] # top left coordinate of square
         bottom_right = self.coord[row+1,col+1] # bottom right coordinate of square
         isolated_square = img[
@@ -37,6 +37,7 @@ class BoardVision:
 
         light_squares = []
         dark_squares = []
+        square_means = []
 
         for row in range(8):
             for col in range(8):
@@ -44,15 +45,17 @@ class BoardVision:
                 file = files[col]
                 rank = ranks[row] if self.bot_is_white else ranks[7-row]
 
-                # Retrieve chess square
-                square_img = self.getSquare(img, row, col)
+                # Retrieve and store chess square
+                square_img = self._getSquareImage(img, row, col)
                 square_object = ChessSquare(square_img, row, col, file, rank)
                 self.squares[row][col] = square_object
+
+                crop_img = utils.adjustSquare(square_img)
+                square_means.append(np.mean(crop_img))
 
                 # Calculate base light/dark colour
                 if row in [2, 3, 4, 5]:
                     square_object.setOccupancy(False)
-                    crop_img, avg_brightness = utils.getSquareFeatures(square_img)
 
                     if square_object.is_light_square:
                         light_squares.append(crop_img)
@@ -62,19 +65,20 @@ class BoardVision:
         # Convert lists to numpy arrays (prevents calculation error)
         light_squares = np.array(light_squares)
         dark_squares = np.array(dark_squares)
+        square_means = np.array(square_means)
 
         # Calculate base profiles for empty squares
         self.light_profile = {
             'avg_sq': np.mean(light_squares, axis=0).astype(np.uint8),
             'std_sq': np.maximum(np.std(light_squares, axis=0), 1e-7),
-            'avg_bright': np.mean(img),
-            'curr_bright': np.mean(img)
+            'avg_bright': np.median(square_means),
+            'curr_bright': np.median(square_means)
         }
         self.dark_profile = {
             'avg_sq': np.mean(dark_squares, axis=0).astype(np.uint8),
             'std_sq': np.maximum(np.std(dark_squares, axis=0), 1e-7),
-            'avg_bright': np.mean(img), 
-            'curr_bright': np.mean(img)
+            'avg_bright': np.median(square_means), 
+            'curr_bright': np.median(square_means)
         }
 
     # Takes a raw unwarped video frame, crops and warps it, and extracts the squares
@@ -83,24 +87,24 @@ class BoardVision:
         img = utils.warpFrame(img_small, self.M)
         self.warped_img = img
 
-        self.light_profile['curr_bright'] = np.mean(img)
-        self.dark_profile['curr_bright'] = np.mean(img)
+        square_means = []
+        square_data = []
 
         for row in range(8):
             for col in range(8):
-                # Retrieve image
-                top_left = self.coord[row, col]
-                bottom_right = self.coord[row+1, col+1]
-                cropped_square = img[int(top_left[1]):int(bottom_right[1]), int(top_left[0]):int(bottom_right[0])]
                 square = self.squares[row][col]
+                square_img = self._getSquareImage(img, row, col)
+                crop_img = utils.adjustSquare(square_img)
+                square_means.append(np.mean(crop_img))
+                square_data.append((square, square_img))
 
-                # Update image
-                square.setImage(cropped_square)
+        square_means = np.array(square_means)
+        self.light_profile['curr_bright'] = np.mean(square_means)
+        self.dark_profile['curr_bright'] = np.mean(square_means)
 
-                # Update occupancy
-                profile = self.light_profile if square.is_light_square else self.dark_profile
-                
-                square.updateOccupancy(profile)
+        for square, square_img in square_data:
+            profile = self.light_profile if square.is_light_square else self.dark_profile
+            square.updateOccupancy(square_img, profile)
 
     # Retrieves current frame occupancy, appends to history, returns mode of occupancy every 10 frames
     # Otherwise, returns None

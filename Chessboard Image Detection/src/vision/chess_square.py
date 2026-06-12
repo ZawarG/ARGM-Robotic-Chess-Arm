@@ -17,18 +17,16 @@ class ChessSquare: # responsibile for vision aspect
         self.is_light_square = (file_int+rank) % 2 # 0 for dark, 1 for light
 
         # initialize piece info
-        self.occupied = True # Initialized in board_vision
+        self.occupancy = True # Initialized in board_vision
 
     def setReference(self, value):
         self.base_profile = value
 
     def setOccupancy(self, value):
-        self.occupied = value
-
-    def setImage(self, value):
-        self.image = value
+        self.occupancy = value
         
-    def updateOccupancy(self, profile):
+    def updateOccupancy(self, image, profile):
+        self.image = image
         self.occupancy = utils.checkOccupancy(self.image, profile, self.name)
         
     def getOccupancy(self):
