@@ -35,8 +35,6 @@ class BoardVision:
         files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
         ranks = [8, 7, 6, 5, 4, 3, 2, 1]
 
-        light_bright = []
-        dark_bright = []
         light_squares = []
         dark_squares = []
 
@@ -57,15 +55,11 @@ class BoardVision:
                     crop_img, avg_brightness = utils.getSquareFeatures(square_img)
 
                     if square_object.is_light_square:
-                        light_bright.append(avg_brightness)
                         light_squares.append(crop_img)
                     else:
-                        dark_bright.append(avg_brightness)
                         dark_squares.append(crop_img)
 
         # Convert lists to numpy arrays (prevents calculation error)
-        light_bright = np.array(light_bright)
-        dark_bright = np.array(dark_bright)
         light_squares = np.array(light_squares)
         dark_squares = np.array(dark_squares)
 
@@ -73,35 +67,15 @@ class BoardVision:
         self.light_profile = {
             'avg_sq': np.mean(light_squares, axis=0).astype(np.uint8),
             'std_sq': np.maximum(np.std(light_squares, axis=0), 1e-7),
-            'avg_bright': np.mean(light_bright),
-            'curr_bright': np.mean(light_bright)
+            'avg_bright': np.mean(img),
+            'curr_bright': np.mean(img)
         }
         self.dark_profile = {
             'avg_sq': np.mean(dark_squares, axis=0).astype(np.uint8),
             'std_sq': np.maximum(np.std(dark_squares, axis=0), 1e-7),
-            'avg_bright': np.mean(dark_bright), 
-            'curr_bright': np.mean(dark_bright)
+            'avg_bright': np.mean(img), 
+            'curr_bright': np.mean(img)
         }
-
-    # Update mean values of unoccupied squares using engine occupancy
-    def updateBackgroundProfiles(self, engine_occ):
-        light_bright = []
-        dark_bright = []
-
-        for row in range(8):
-            for col in range(8):
-                if not engine_occ[row][col]:
-                    square = self.squares[row][col]
-
-                    gray, bright = utils.getSquareFeatures(square.image)
-
-                    if square.is_light_square:
-                        light_bright.append(bright)
-                    else:
-                        dark_bright.append(bright)
-
-        self.light_profile['curr_bright'] = np.mean(light_bright)
-        self.dark_profile['curr_bright'] = np.mean(dark_bright)
 
     # Takes a raw unwarped video frame, crops and warps it, and extracts the squares
     def updateFrame(self, raw_img):
@@ -109,7 +83,8 @@ class BoardVision:
         img = utils.warpFrame(img_small, self.M)
         self.warped_img = img
 
-        self.curr_frame_bright = np.mean(img)
+        self.light_profile['curr_bright'] = np.mean(img)
+        self.dark_profile['curr_bright'] = np.mean(img)
 
         for row in range(8):
             for col in range(8):
@@ -125,7 +100,7 @@ class BoardVision:
                 # Update occupancy
                 profile = self.light_profile if square.is_light_square else self.dark_profile
                 
-                square.updateOccupancy(profile, self.curr_frame_bright)
+                square.updateOccupancy(profile)
 
     # Retrieves current frame occupancy, appends to history, returns mode of occupancy every 10 frames
     # Otherwise, returns None
