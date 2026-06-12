@@ -170,15 +170,15 @@ def getSquareFeatures(img, border_ratio=0.1):
     # Detect average brightness and std
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     avg_brightness = np.mean(gray)
-    std = gray.std()
 
-    return gray, avg_brightness, std
+    return gray, avg_brightness
 
-def checkOccupancy(square, profile, curr_frame_bright, curr_occ, name, FILL_THRESH = 0.03):
-    gray, _, _ = getSquareFeatures(square)
+def checkOccupancy(square, profile, curr_frame_bright, name, FILL_THRESH = 0.03):
+    gray, _, = getSquareFeatures(square)
 
     # Retrieve brightness offset
-    start_frame_bright = profile['start_frame_bright']
+    start_frame_bright = profile['avg_bright']
+    curr_frame_bright = profile['curr_bright']
     brightness_offset = curr_frame_bright - start_frame_bright # Accounts for exposure changes during game
 
     # Retrieve profile variables
@@ -189,18 +189,14 @@ def checkOccupancy(square, profile, curr_frame_bright, curr_occ, name, FILL_THRE
     fill_z = np.abs(gray.astype(np.float32) - avg_sq) / (std_sq + 1)
 
     # Detect contour area and shape
-    fill_ratio = detectContourArea(gray, fill_z)
+    fill_ratio = detectContourArea(fill_z)
 
-    # if name=='h6':
-    #     print(fill_ratio, fill_ratio>0.05)
-
-    print(name,fill_ratio, fill_ratio>FILL_THRESH)
+    if name=='h6':
+        print(name, fill_ratio, fill_ratio>FILL_THRESH, curr_frame_bright, start_frame_bright)
 
     return fill_ratio > FILL_THRESH
 
-def detectContourArea(square, z):
-    # diff = cv2.absdiff(square, avg_sq) # first find which pixels changed compared to the empty square
-
+def detectContourArea(z):
     mask = (z > 3).astype(np.uint8) * 255
 
     kernel = np.ones((5,5), np.uint8)
@@ -220,33 +216,6 @@ def detectContourArea(square, z):
     )
 
     fill_ratio = np.count_nonzero(mask) / mask.size
-
-    # overlay = cv2.cvtColor(square, cv2.COLOR_GRAY2RGB)
-
-    # print(mask.shape, overlay.shape)
-    # h = mask.shape[0]
-
-    # bottom_half_fill = np.count_nonzero(mask[h//2:, :]) / mask[h//2:, :].size
-    # top_half_fill = np.count_nonzero(mask[:h//2, :]) / mask[:h//2, :].size
-
-    # overlay[mask > 0] = [255, 0, 0]
-
-    # fig, ax = plt.subplots(1, 3, figsize=(12, 4))
-
-    # ax[0].imshow(square, cmap='gray')
-    # ax[0].set_title("Square")
-
-    # ax[1].imshow(mask, cmap='gray')
-    # ax[1].set_title(f"Mask\nFill={fill_ratio:.3f}\n{bottom_half_fill:.3f}\n{top_half_fill:.3f}")
-
-    # ax[2].imshow(overlay)
-    # ax[2].set_title("Foreground Overlay")
-
-    # for a in ax:
-    #     a.axis('off')
-
-    # plt.tight_layout()
-    # plt.show()
 
     return fill_ratio
 

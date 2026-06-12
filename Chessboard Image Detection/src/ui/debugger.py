@@ -14,7 +14,6 @@ import numpy as np
 def drawOccupancyOverlay(board_vision):
     img = board_vision.warped_img
     coords = board_vision.coord
-    curr_frame_bright = board_vision.curr_frame_bright
 
     # 1. Draw the 9x9 Grid Lines
     # Loop through rows and columns to connect the intersection points
@@ -88,15 +87,15 @@ def displaySquares(vision):
             img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             ax.imshow(img_rgb)
 
-            gray, _, _ = utils.getSquareFeatures(img)
+            gray, _ = utils.getSquareFeatures(img)
             profile = light_prof if square.is_light_square else dark_prof
             occupied = square.getOccupancy()
             color = 'red' if occupied else 'green'
 
-            brightness_offset = vision.curr_frame_bright - profile['start_frame_bright']
+            brightness_offset = profile['curr_bright'] - profile['avg_bright']
 
             z = np.abs(gray.astype(np.float32) - profile['avg_sq'] - brightness_offset) / (profile['std_sq'] + 1) 
-            fill = utils.detectContourArea(gray, z)
+            fill = utils.detectContourArea(z)
 
             # 3. Visual Feedback
             rect = patches.Rectangle(
