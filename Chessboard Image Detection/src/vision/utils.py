@@ -187,10 +187,11 @@ def checkOccupancy(square, profile, name, FILL_THRESH = 0.03):
     # Detect contour area and shape
     fill_ratio = detectContourArea(fill_z)
 
-    if name=='h6':
-        print(name, fill_ratio, fill_ratio>FILL_THRESH, curr_frame_bright, start_frame_bright)
+    # Create threshold for fill area
+    brightness_ratio = curr_frame_bright/start_frame_bright
+    adaptive_fill_thresh = FILL_THRESH * brightness_ratio
 
-    return fill_ratio > FILL_THRESH
+    return fill_ratio > adaptive_fill_thresh
 
 def detectContourArea(z):
     mask = (z > 3).astype(np.uint8) * 255
