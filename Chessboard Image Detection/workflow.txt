@@ -1,0 +1,39 @@
+*Goal*
+Take image
+Detects board outline with YOLO
+Extract square coordinates
+Return data to allow for occupancy detection
+
+Why do this? It reduces all background noise, which was one of the largest factors causing difficulty in board detection.
+This increases board detection efficiency and reduces the need for an isolated location or specific board while playing the game.
+
+*Chess Board Localization*
+Step 1: Input images into roboflow, label, add augmentation, extract yolo dataset
+Step 2: Train YOLO model (bash: yolo pose train data=data.yaml model=yolov8n-pose.pt epochs=50 patience=40)
+
+For each run:
+Step 3: Use model to detect board
+Step 4: Crop and warp image to board
+Step 5: Detect chess square locations
+Step 6: Lock chess square locations for entire game. Detect occupancy (no change in method)
+
+*Occupancy Detection*
+Step 1: Separate chess board image into 64 individual squares. While doing so, classify their colour (light or dark)
+Step 2: Initialize a reference set for unoccupied squares
+    Take squares from a6 to h3
+    Save a light square average brightness and a dark square average brightness. Store these as base_light and base_dark
+Step 3: Check occupancy of each square:
+    Crop the image to reduce the chance of getting any information from neighbouring squares
+    Turn the image grayscale and calculate its average brightness
+    Determine occupancy based on whether the average brightness of the square is within a set range of the base colour
+    Otherwise, detect based on the standard deviation of colours in the square
+    Validation check: Blur and search for edges on detected occupied squares. If they do not exist, mark the square as unoccupied
+
+*Edits*
+Using brightness for lighting differences
+Using std for rough texture variation
+Problem: std and mean are sensitive to reflections, shadows, camera exposure changes
+
+Possible solutions:
+Using sobel gradients for edges (it's possible to pinpoint just horizontal edges, which may be helpful since the wood grain is vertical)
+Using local binary pattern to check variation in brightness (resistant to brightness changes)
