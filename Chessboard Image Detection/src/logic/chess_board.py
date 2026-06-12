@@ -39,6 +39,8 @@ class ChessBoard:
     def update(self, img):
         if img is not None:
             self.vision.updateFrame(img)
+            engine_occ = self.getEngineOccupancy()
+            self.vision.updateBackgroundProfiles(engine_occ)
         
         if self.state == GameState.ANIMATING_MOVE:
             self.__handleAnimating()
