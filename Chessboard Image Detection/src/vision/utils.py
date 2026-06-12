@@ -173,7 +173,7 @@ def getSquareFeatures(img, border_ratio=0.1):
 
     return gray, avg_brightness
 
-def checkOccupancy(square, profile, curr_frame_bright, name, FILL_THRESH = 0.03):
+def checkOccupancy(square, profile, name, FILL_THRESH = 0.03):
     gray, _, = getSquareFeatures(square)
 
     # Retrieve brightness offset

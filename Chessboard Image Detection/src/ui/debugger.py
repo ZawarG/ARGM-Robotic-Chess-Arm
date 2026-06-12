@@ -66,7 +66,6 @@ def displaySquares(vision):
     stabilized_matrix = None
     for _ in range(10):
         stabilized_matrix = vision.getStabilizedOccupancy()
-    curr_frame_bright = vision.curr_frame_bright
 
     # Create 8x8 figure
     fig, axes = plt.subplots(8, 8, figsize=(7, 7))

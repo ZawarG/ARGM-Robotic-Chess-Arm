@@ -28,8 +28,8 @@ class ChessSquare: # responsibile for vision aspect
     def setImage(self, value):
         self.image = value
         
-    def updateOccupancy(self, profile, curr_frame_bright):
-        self.occupancy = utils.checkOccupancy(self.image, profile, curr_frame_bright, self.name)
+    def updateOccupancy(self, profile):
+        self.occupancy = utils.checkOccupancy(self.image, profile, self.name)
         
     def getOccupancy(self):
         return self.occupancy
