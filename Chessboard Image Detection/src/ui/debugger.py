@@ -46,6 +46,15 @@ def drawOccupancyOverlay(board_vision):
                 if square is not None:
                     # Call the occupancy check function from your utils/square logic
                     is_occupied = square.getOccupancy() 
+
+                    profile = board_vision.light_profile if square.is_light_square else board_vision.dark_profile
+                    hsv_offset = profile['curr_hsv'] - profile['avg_hsv']
+
+                    adjusted_avg = profile['avg_sq'] + hsv_offset
+                    z_channels = (square.image.astype(np.float32) - adjusted_avg) / (profile['std_sq'] + 1)
+                    z_euclidean = np.sqrt(np.sum(np.square(z_channels), axis=2))
+
+                    fill = utils.detectContourArea(z_euclidean, None, show=False)
                     
                     # BGR Colors: Red if occupied, Green if empty
                     color = (0, 0, 255) if is_occupied else (0, 255, 0)
@@ -54,7 +63,7 @@ def drawOccupancyOverlay(board_vision):
                     cv2.circle(img, center_pt, 8, color, -1)
                     
                     # Optional: Overlay text showing the chess notation (e.g., "e4")
-                    label = square.name
+                    label = f"{square.name},{fill:.3f}"
                     cv2.putText(img, label, (center_x - 10, center_y + 20), 
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
 
@@ -86,14 +95,13 @@ def displaySquares(vision):
             img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             ax.imshow(img_rgb)
 
-            gray = utils.adjustSquare(img)
             profile = light_prof if square.is_light_square else dark_prof
             occupied = square.getOccupancy()
             color = 'red' if occupied else 'green'
 
-            brightness_offset = profile['curr_bright'] - profile['avg_bright']
+            brightness_offset = profile['curr_hsv'] - profile['avg_hsv']
 
-            z = np.abs(gray.astype(np.float32) - profile['avg_sq'] - brightness_offset) / (profile['std_sq'] + 1) 
+            z = np.abs(img.astype(np.float32) - profile['avg_sq'] - brightness_offset) / (profile['std_sq'] + 1) 
             fill = utils.detectContourArea(z)
 
             # 3. Visual Feedback

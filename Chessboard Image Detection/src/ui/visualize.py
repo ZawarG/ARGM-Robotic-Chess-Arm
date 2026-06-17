@@ -32,7 +32,6 @@ symbol_to_name = {
 class ChessVisualizer:
 
     def __init__(self, board):
-
         self.board = board
 
         self.animating_move = None
@@ -52,19 +51,19 @@ class ChessVisualizer:
         for symbol, name in symbol_to_name.items():
             img_path = image_dir / f'{name}.png'
 
+            if not img_path.exists():
+                raise FileNotFoundError(f"Could not find piece image: {img_path}")
+
             try:
                 pil_img = Image.open(img_path).convert("RGBA")
-
-                mode = pil_img.mode
                 size = pil_img.size
                 data = pil_img.tobytes()
 
-                py_img = pygame.image.fromstring(data, size, mode)
-
+                py_img = pygame.image.fromstring(data, size, "RGBA")
                 img = pygame.transform.scale(py_img, (square_size, square_size))
                 self.piece_images[name] = img
             except Exception as e:
-                print(f"PIL failed: {e}")
+                print(f"Failed to load or process image {name}: {e}")
 
             if not Path.exists(img_path):
                 raise FileNotFoundError(f"Could not find piece image: {img_path}")

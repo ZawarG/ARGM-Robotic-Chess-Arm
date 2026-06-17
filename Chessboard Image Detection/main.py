@@ -47,7 +47,7 @@ def main():
 def runCalibration(img, model):
     # Crop and preprocess
     img_small = utils.makeImageSmall(img)
-    img_cropped = utils.cropImage(img_small, model)
+    img_cropped = utils.cropImageToBoard(img_small, model)
     img_mask = utils.preprocessImage(img_cropped)
 
     # Attempt automatic detection
@@ -108,6 +108,8 @@ def testCode(model) :
 
         paused = False
 
+        loops = 0
+
         while True:
             # If not paused, capture a new frame and update the engine
             if not paused:
@@ -138,7 +140,10 @@ def testCode(model) :
             elif key == ord('q'):  # 'Q' quits the stream
                 break
 
-            # debugger.displaySquares(game.vision)
+            # loops+=1
+            # if loops % 5 == 0:
+            #     print(loops)
+            #     debugger.displaySquares(game.vision)
         game.close()
         cap.release()
         cv2.destroyAllWindows()

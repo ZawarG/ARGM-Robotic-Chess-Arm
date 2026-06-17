@@ -26,7 +26,9 @@ class BoardVision:
             int(top_left[1]):int(bottom_right[1]), 
             int(top_left[0]):int(bottom_right[0])
         ]
-        return isolated_square
+
+        hsv = utils.adjustSquare(isolated_square)
+        return hsv
 
     def initializeBoard(self, img, M):
         self.warped_img = img
@@ -46,21 +48,20 @@ class BoardVision:
                 rank = ranks[row] if self.bot_is_white else ranks[7-row]
 
                 # Retrieve and store chess square
-                square_img = self._getSquareImage(img, row, col)
-                square_object = ChessSquare(square_img, row, col, file, rank)
+                hsv_img = self._getSquareImage(img, row, col)
+                square_object = ChessSquare(hsv_img, row, col, file, rank)
                 self.squares[row][col] = square_object
 
-                crop_img = utils.adjustSquare(square_img)
-                square_means.append(np.mean(crop_img))
+                square_means.append(np.mean(hsv_img))
 
                 # Calculate base light/dark colour
                 if row in [2, 3, 4, 5]:
                     square_object.setOccupancy(False)
 
                     if square_object.is_light_square:
-                        light_squares.append(crop_img)
+                        light_squares.append(hsv_img)
                     else:
-                        dark_squares.append(crop_img)
+                        dark_squares.append(hsv_img)
 
         # Convert lists to numpy arrays (prevents calculation error)
         light_squares = np.array(light_squares)
@@ -69,16 +70,16 @@ class BoardVision:
 
         # Calculate base profiles for empty squares
         self.light_profile = {
-            'avg_sq': np.mean(light_squares, axis=0).astype(np.uint8),
+            'avg_sq': np.mean(light_squares, axis=0).astype(np.float32),
             'std_sq': np.maximum(np.std(light_squares, axis=0), 1e-7),
-            'avg_bright': np.median(square_means),
-            'curr_bright': np.median(square_means)
+            'avg_hsv': np.median(square_means),
+            'curr_hsv': np.median(square_means)
         }
         self.dark_profile = {
-            'avg_sq': np.mean(dark_squares, axis=0).astype(np.uint8),
+            'avg_sq': np.mean(dark_squares, axis=0).astype(np.float32),
             'std_sq': np.maximum(np.std(dark_squares, axis=0), 1e-7),
-            'avg_bright': np.median(square_means), 
-            'curr_bright': np.median(square_means)
+            'avg_hsv': np.median(square_means), 
+            'curr_hsv': np.median(square_means)
         }
 
     # Takes a raw unwarped video frame, crops and warps it, and extracts the squares
@@ -93,14 +94,15 @@ class BoardVision:
         for row in range(8):
             for col in range(8):
                 square = self.squares[row][col]
-                square_img = self._getSquareImage(img, row, col)
-                crop_img = utils.adjustSquare(square_img)
-                square_means.append(np.mean(crop_img))
-                square_data.append((square, square_img))
+                hsv_img = self._getSquareImage(img, row, col)
+                square_means.append(np.mean(hsv_img))
+                square_data.append((square, hsv_img))
 
         square_means = np.array(square_means)
-        self.light_profile['curr_bright'] = np.mean(square_means)
-        self.dark_profile['curr_bright'] = np.mean(square_means)
+        self.light_profile['curr_hsv'] = np.median(square_means)
+        self.dark_profile['curr_hsv'] = np.median(square_means)
+
+        print(self.light_profile['curr_hsv'], self.light_profile['curr_hsv']/self.light_profile['avg_hsv']*0.02)
 
         for square, square_img in square_data:
             profile = self.light_profile if square.is_light_square else self.dark_profile
@@ -119,7 +121,7 @@ class BoardVision:
         # Find mode
         array = np.array(self.occupancy_buffer)
         sum_matrix = np.sum(array, axis = 0)
-        mode_matrix = (sum_matrix >= 5).tolist()
+        mode_matrix = (sum_matrix >= STABILITY_THRESHOLD//2).tolist()
 
         # Flush buffer
         self.occupancy_buffer = []

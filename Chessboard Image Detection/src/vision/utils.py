@@ -131,7 +131,7 @@ def preprocessImage(img, border_high=15, testing=False):
 
     return res
 
-def cropImage(img, model):
+def cropImageToBoard(img, model):
     results = model(img)[0]
     
     if not results:
@@ -160,59 +160,64 @@ def adjustSquare(img, border_ratio=0.1):
     # Crop
     height, width = img.shape[:2]
     b_top_height = int(height * border_ratio)
-    b_bot_height = int(height * border_ratio * 3) #  Double crop at bottom to account for how piece tops overlapping due camera angle
+    b_bot_height = int(height * border_ratio * 4) # Crop bottom extra to account for how piece tops overlapping due camera angle
     b_width = int(width * border_ratio)
     img = img[b_top_height:height-b_bot_height, b_width:width-b_width] 
 
     # Detect average brightness and std
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
-    return gray
+    return hsv
 
-def checkOccupancy(square, profile, name, FILL_THRESH = 0.03):
-    gray = adjustSquare(square)
+def checkOccupancy(square, profile, name, FILL_THRESH = 0.2):
+    # Retrieve hsv offset
+    start_frame_bright = profile['avg_hsv']
+    curr_frame_bright = profile['curr_hsv']
+    hsv_offset = curr_frame_bright - start_frame_bright # Accounts for exposure changes during game
 
-    # Retrieve brightness offset
-    start_frame_bright = profile['avg_bright']
-    curr_frame_bright = profile['curr_bright']
-    brightness_offset = curr_frame_bright - start_frame_bright # Accounts for exposure changes during game
-
-    # Retrieve profile variables
-    avg_sq = profile['avg_sq'] + brightness_offset
+    # Retrieve profile variables, adjust hsv dynamically
+    avg_sq = profile['avg_sq'] + hsv_offset
     std_sq = profile['std_sq']
-    
-    # Calculate z-score
-    fill_z = np.abs(gray.astype(np.float32) - avg_sq) / (std_sq + 1)
+
+    # Calculate z-score differences per channel
+    z_channels = np.abs(square.astype(np.float32) - avg_sq) / (std_sq + 1)
+
+    # Calculate 3D Euclidean distance including all channels
+    fill_z = np.sqrt(np.sum(np.square(z_channels), axis=2))
 
     # Detect contour area and shape
-    fill_ratio = detectContourArea(fill_z)
+    fill_ratio = detectContourArea(fill_z, square)
 
     # Create threshold for fill area
-    brightness_ratio = curr_frame_bright/start_frame_bright
-    adaptive_fill_thresh = FILL_THRESH * brightness_ratio
+    # brightness_ratio = curr_frame_bright/start_frame_bright
+    adaptive_fill_thresh = FILL_THRESH
+
+    # print(adaptive_fill_thresh)
 
     return fill_ratio > adaptive_fill_thresh
 
-def detectContourArea(z):
+def detectContourArea(z, square, show=False):
     mask = (z > 3).astype(np.uint8) * 255
-
     kernel = np.ones((5,5), np.uint8)
-
-    mask = cv2.morphologyEx(
-        mask,
-        cv2.MORPH_CLOSE,
-        kernel
-    )
-
+    mask = cv2.morphologyEx(mask,cv2.MORPH_CLOSE,kernel)
     kernel2 = np.ones((3,3), np.uint8)
+    mask = cv2.morphologyEx(mask,cv2.MORPH_OPEN,kernel2)
 
-    mask = cv2.morphologyEx(
-        mask,
-        cv2.MORPH_OPEN,
-        kernel2
-    )
+    fill_area = np.count_nonzero(mask)
+    fill_ratio = fill_area / mask.size
 
-    fill_ratio = np.count_nonzero(mask) / mask.size
+    # weight = gaussian(center)
+    # weighted_fill = np.sum(mask * weight)
+
+    if show:
+        bgr_img = cv2.cvtColor(square, cv2.COLOR_HSV2BGR)
+        overlay = bgr_img.copy()
+        overlay[mask > 0] = (0, 0, 255)
+        display = cv2.addWeighted(bgr_img, 0.7, overlay, 0.3, 0)
+
+        cv2.putText(display, f"Area: {fill_area}", (5, 20), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+        cv2.imshow("Fill Area", display)
+        cv2.waitKey(0)
 
     return fill_ratio
-

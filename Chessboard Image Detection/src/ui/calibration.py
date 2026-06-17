@@ -19,7 +19,7 @@ def orderPoints(points):
     rect[3] = points[np.argmax(diff)] # Bottom-left
     return rect
 
-def adjustImageManually(img, ):
+def adjustImageManually(img):
     window_name = "Board Calibration"
     cv2.namedWindow(window_name)
 

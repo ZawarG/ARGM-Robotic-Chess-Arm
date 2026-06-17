@@ -8,7 +8,8 @@ from src.hardware.robot import RobotController
 #  (\(\
 # ( -.-)
 # o_(")(")
-# Chess board class adjusted to track the moves of two players (for testing)
+# The entire chessboard is an object. 
+# This class handles the game engine/finite state machine.
 
 class GameState(Enum):
     INITIALIZING = auto()
@@ -16,7 +17,6 @@ class GameState(Enum):
     ROBOT_MOVING = auto()
     ANIMATING_MOVE = auto()
     GAME_OVER = auto()
-    WAITING_FOR_MOVE = auto()
 
 class ChessBoard:
     def __init__(self, coord, bot_is_white, warped_img, M):
@@ -31,8 +31,7 @@ class ChessBoard:
 
         # State management
         self.bot_is_white = bot_is_white
-        # self.state = GameState.ROBOT_MOVING if self.bot_is_white else GameState.HUMAN_MOVING
-        self.state = GameState.WAITING_FOR_MOVE
+        self.state = GameState.ROBOT_MOVING if self.bot_is_white else GameState.HUMAN_MOVING
         self.pending_push_move = None
         self.last_move_by_human = False
         
@@ -44,10 +43,8 @@ class ChessBoard:
         if self.state == GameState.ANIMATING_MOVE:
             self.__handleAnimating()
         else:
-            self.visualizer.update()
+            if hasattr(self, 'vis'): self.visualizer.update() #because i have self.vis commented
 
-        if self.state == GameState.WAITING_FOR_MOVE:
-            self.__handleTrackBoard()
         if self.state == GameState.HUMAN_MOVING:
             self.__handleHumanMoving()
         elif self.state == GameState.ROBOT_MOVING:
@@ -70,36 +67,8 @@ class ChessBoard:
             if self.board.is_game_over():
                 self.state = GameState.GAME_OVER
             else:
-                self.state = GameState.WAITING_FOR_MOVE
                 # switch between human and robot
-                # self.state = GameState.ROBOT_MOVING if self.last_move_by_human else GameState.HUMAN_MOVING
-
-    def __handleTrackBoard(self):
-        stabilized_observed = self.vision.getStabilizedOccupancy()
-
-        if stabilized_observed is None:
-            return
-
-        changed = self.getChangedSquares(stabilized_observed)
-        if not changed:
-            return
-
-        move = self.detectMove(changed)
-        print(move)
-
-        if move:
-            # Determine who made the move based on the engine's current turn
-            current_turn = "White" if self.board.turn == chess.WHITE else "Black"
-            print(f"Detected move ({current_turn}): {move}")
-            
-            self.pending_push_move = move  
-            piece = self.board.piece_at(move.from_square)
-            self.visualizer.start_animation(piece.symbol(), move.from_square, move.to_square)
-            self.state = GameState.ANIMATING_MOVE 
-        else:
-            # Mid-move or noise, stay tracking
-            self.state = GameState.WAITING_FOR_MOVE
-
+                self.state = GameState.ROBOT_MOVING if self.last_move_by_human else GameState.HUMAN_MOVING
 
     def __handleHumanMoving(self):
         stabilized_observed = self.vision.getStabilizedOccupancy()
@@ -166,44 +135,36 @@ class ChessBoard:
         if len(changed) == 0: # No move
             return None
         
-        print([chess.square_name(s) for s in changed])
-        
         possible_moves = []
         observed_squares = set(changed)
         
         for move in self.board.legal_moves:
-            move_squares = {move.from_square, move.to_square}
-
-            print(move, move_squares)
+            from_row, from_col = 7 - (move.from_square // 8), move.from_square % 8
+            to_row, to_col = 7 - (move.to_square // 8), move.to_square % 8
+            move_squares = {(from_row, from_col), (to_row, to_col)}
 
             # en passent
             if self.board.is_en_passant(move):
-                captured_square = chess.square(chess.square_file(move.to_square), chess.square_rank(move.from_square))
-                move_squares.add(captured_square)
+                move_squares.add((from_row, to_col))
             # castling
             if self.board.is_castling(move):
-                rank = chess.square_rank(move.from_square)
-                if move.to_square > move.from_square: # kingside
-                    rook_from = chess.square(7, rank) # rook origin
-                    rook_to   = chess.square(5, rank) # rook destination
+                if move.to_square > move.from_square:  # kingside
+                    move_squares.add((from_row, from_col + 3))  # rook origin
+                    move_squares.add((from_row, from_col + 1))  # rook destination
                 else:  # queenside
-                    rook_from = chess.square(0, rank) # rook origin
-                    rook_to   = chess.square(3, rank) # rook destination
-                move_squares.add(rook_from)
-                move_squares.add(rook_to)
-            # ! What to do for promotion?
-            if move_squares in observed_squares:
+                    move_squares.add((from_row, from_col - 4))  # rook origin
+                    move_squares.add((from_row, from_col - 1))  # rook destination
+            # could be promotion
+            if observed_squares == move_squares:
                 possible_moves.append(move)
         
-        print('possible moves', possible_moves)
-
         if possible_moves:
             for move in possible_moves:
                 if move.promotion == chess.QUEEN: # if pawn promotion, default to queen
                     move_to_play = move
                     break
             else:
-                move_to_play = possible_moves[0] # otherwise, pick first legal match
+                move_to_play = possible_moves[0] #otherwise, pick first legal match
 
             return move_to_play
         
@@ -234,10 +195,10 @@ class ChessBoard:
         for row in range(8):
             for col in range(8):
                 if stabilized_observed[row][col] != engine_occ[row][col]:
-                    changed.append(chess.square(col, row))
+                    changed.append((row, col))
 
         return changed
     
     def close(self):
         self.engine.quit()
-        self.visualizer.quit()
+        # self.visualizer.quit()
