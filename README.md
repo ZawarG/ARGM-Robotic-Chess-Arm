@@ -28,6 +28,7 @@ A robotic chess system that detects board state from a camera feed, tracks moves
 ### Board Segmentation
 
 ### Digital Visualizer
+<img width="400" height="422" alt="Digital Chess Game Visualizer" src="https://github.com/user-attachments/assets/bc8d921f-1aa7-483a-a2b2-34497dbc55eb" />
 
 ## System Loop
 ```
