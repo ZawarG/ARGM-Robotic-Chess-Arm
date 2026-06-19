@@ -23,9 +23,8 @@ A robotic chess system that detects board state from a camera feed, tracks moves
 
 ## Demo & Screenshots
 
-### Board Detection
-
-### Board Segmentation
+### Board Detection & Segmentation
+<img width="400" height="438" alt="Chess Board and Square Localization" src="https://github.com/user-attachments/assets/1ac860ec-5a66-41e0-ac07-b7a1ec556efe" />
 
 ### Digital Visualizer
 <img width="400" height="422" alt="Digital Chess Game Visualizer" src="https://github.com/user-attachments/assets/bc8d921f-1aa7-483a-a2b2-34497dbc55eb" />
