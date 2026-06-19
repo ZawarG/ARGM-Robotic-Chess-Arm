@@ -29,6 +29,13 @@ A robotic chess system that detects board state from a camera feed, tracks moves
 Automatic board localization using YOLO-assisted detection and OpenCV preprocessing.
 The pipeline extracts the chessboard from the camera feed, applies a perspective warp, and generates a stable 8×8 grid for gameplay.
 
+### Occupancy Detection
+<img width="400" height="332" alt="Manual Calibration and Occupancy Detection" src="https://github.com/user-attachments/assets/87d4be65-9997-4b52-bdf4-a6e7a2ac9360" />
+After calibration, the board is split into an 8×8 grid, and each square is analyzed independently in HSV space.
+The system uses a learned empty-square profile to classify each square as occupied or empty, improving robustness against lighting changes and board texture noise.
+A manual calibration fallback is used when automatic detection fails. This mode is also used for testing since the primary detection pipeline assumes an initially visible, empty board.
+Note: Square cropping is intentionally tight to isolate per-square analysis and improve occupancy classification reliability.
+
 ### Digital Visualizer
 <img width="400" height="422" alt="Digital Chess Game Visualizer" src="https://github.com/user-attachments/assets/bc8d921f-1aa7-483a-a2b2-34497dbc55eb" />
 The visualizer mirrors the physical game state by replaying moves as they are detected and validated by the system. It serves as a debugging and verification tool for board-state tracking and Stockfish integration.
