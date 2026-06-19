@@ -2,6 +2,7 @@
 
 ## Overview
 A robotic chess system that detects board state from a camera feed, tracks moves through square occupancy changes, interfaces with a chess engine, and ultimately controls a robotic arm to execute physical moves.
+> The system is currently capable of detecting board state, tracking moves, and visualizing gameplay in real time using Stockfish.
 
 ## How It Works
 1. A camera captures the chessboard in an empty state
@@ -25,14 +26,8 @@ A robotic chess system that detects board state from a camera feed, tracks moves
 
 ### Board Detection & Segmentation
 <img width="400" height="438" alt="Chess Board and Square Localization" src="https://github.com/user-attachments/assets/1ac860ec-5a66-41e0-ac07-b7a1ec556efe" />
-Automatic board localization: 
-- The image is adjusted to a size of 800, typically helping with detection due to reduced noise
-- YOLO detects the board and crops the image to eliminate noise from the background of the image
-- The image is preprocessed before applying an otsu threshold to create a mask clearly depicting the squares
-- A manual threshold is applied to isolate the border of the chess board. Without this, the algorithm struggles to detect it
-- The masks are joined together before running OpenCV's built-in chess board detector
-- The image is warped to the four corners of the board, and this setting is saved throughout the entire game
-- The coordinates provided by the detector are sorted and used to isolate each individual square
+Automatic board localization using YOLO-assisted detection and OpenCV preprocessing.
+The pipeline extracts the chessboard from the camera feed, applies a perspective warp, and generates a stable 8×8 grid for gameplay.
 
 ### Digital Visualizer
 <img width="400" height="422" alt="Digital Chess Game Visualizer" src="https://github.com/user-attachments/assets/bc8d921f-1aa7-483a-a2b2-34497dbc55eb" />
