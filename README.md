@@ -34,12 +34,11 @@ The pipeline extracts the chessboard from the camera feed, applies a perspective
 ### Occupancy Detection
 <img width="400" height="332" alt="Manual Calibration and Occupancy Detection" src="https://github.com/user-attachments/assets/87d4be65-9997-4b52-bdf4-a6e7a2ac9360" />
 
-After calibration, the board is split into an 8×8 grid, and each square is analyzed independently in HSV space.
-The system uses a learned empty-square profile to classify each square as occupied or empty, improving robustness against lighting changes and board texture noise.
+A manual calibration fallback is used when automatic detection fails and for testing under controlled conditions.
 
-A manual calibration fallback is used when automatic detection fails. This mode is also used for testing since the primary detection pipeline assumes an initially visible, empty board.
+After calibration, the board is split into an 8×8 grid and each square is classified as occupied or empty using a learned empty-square profile.
 
-Note: Square cropping is intentionally tight to isolate per-square analysis and improve occupancy classification reliability.
+Square cropping is intentionally tight to improve per-square classification consistency.
 
 ### Digital Visualizer
 <img width="400" height="422" alt="Digital Chess Game Visualizer" src="https://github.com/user-attachments/assets/bc8d921f-1aa7-483a-a2b2-34497dbc55eb" />
