@@ -92,7 +92,7 @@ def displaySquares(vision):
                 ax.axis('off')
                 continue
                 
-            img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            img_rgb = cv2.cvtColor(img, cv2.COLOR_HSV2RGB)
             ax.imshow(img_rgb)
 
             profile = light_prof if square.is_light_square else dark_prof
@@ -102,7 +102,7 @@ def displaySquares(vision):
             brightness_offset = profile['curr_hsv'] - profile['avg_hsv']
 
             z = np.abs(img.astype(np.float32) - profile['avg_sq'] - brightness_offset) / (profile['std_sq'] + 1) 
-            fill = utils.detectContourArea(z)
+            fill = utils.detectContourArea(z, None, show=False)
 
             # 3. Visual Feedback
             rect = patches.Rectangle(

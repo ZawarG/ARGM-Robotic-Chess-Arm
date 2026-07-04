@@ -30,6 +30,7 @@ def generateGridCoordinates(board_size=800):
     return coords
 
 def warpFrame(img, M, board_size=800):
+    print(img.shape[0], img.shape[1])
     return cv2.warpPerspective(img, M, (board_size, board_size))
 
 def runInitialCalibration(img, source_pts, board_size=800):
@@ -137,15 +138,19 @@ def cropImageToBoard(img, model):
     if not results:
         print("Board not detected by model")
         return img
+    
+    # annotated = results.plot()
+    # cv2.imshow("YOLO Detection", annotated)
+    # cv2.waitKey(1)
 
     # Extract location
     box = results.boxes[0]
     x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
     x1, y1, x2, y2 = map(int, [x1, y1, x2, y2]) # convert to int
-
+    
     # Crop image to board
     cropped = img[y1:y2, x1:x2]
-
+    
     return cropped
 
 def makeImageSmall(img):
@@ -153,6 +158,7 @@ def makeImageSmall(img):
     scale = display_height / img.shape[0]
     display_width = int(img.shape[1] * scale)
     img_small = cv2.resize(img, (display_width, display_height))
+    print(img_small.shape[0], img_small.shape[1])
     return img_small
 
 # Square occupancy
@@ -169,7 +175,7 @@ def adjustSquare(img, border_ratio=0.1):
 
     return hsv
 
-def checkOccupancy(square, profile, name, FILL_THRESH = 0.2):
+def checkOccupancy(square, profile, name, FILL_THRESH = 0.3):
     # Retrieve hsv offset
     start_frame_bright = profile['avg_hsv']
     curr_frame_bright = profile['curr_hsv']
@@ -189,15 +195,13 @@ def checkOccupancy(square, profile, name, FILL_THRESH = 0.2):
     fill_ratio = detectContourArea(fill_z, square)
 
     # Create threshold for fill area
-    # brightness_ratio = curr_frame_bright/start_frame_bright
-    adaptive_fill_thresh = FILL_THRESH
-
-    # print(adaptive_fill_thresh)
+    hsv_ratio = curr_frame_bright/start_frame_bright
+    adaptive_fill_thresh = FILL_THRESH*hsv_ratio
 
     return fill_ratio > adaptive_fill_thresh
 
 def detectContourArea(z, square, show=False):
-    mask = (z > 3).astype(np.uint8) * 255
+    mask = (z > 3.25).astype(np.uint8) * 255
     kernel = np.ones((5,5), np.uint8)
     mask = cv2.morphologyEx(mask,cv2.MORPH_CLOSE,kernel)
     kernel2 = np.ones((3,3), np.uint8)

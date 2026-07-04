@@ -50,6 +50,10 @@ def runCalibration(img, model):
     img_cropped = utils.cropImageToBoard(img_small, model)
     img_mask = utils.preprocessImage(img_cropped)
 
+    cv2.imshow("small", img_small)
+    cv2.imshow("cropped", img_cropped)
+    cv2.imshow("mask", img_mask)
+
     # Attempt automatic detection
     board_detected, corners = utils.detectSquares(img_mask) 
 
@@ -84,7 +88,7 @@ def testCode(model) :
         debugger.displaySquares(game.vision)
 
     else:
-        video_path = "Chessboard Image Detection/data/videos/game.mp4"
+        video_path = "Chessboard Image Detection/data/videos/starts_empty.mov"
         cap = cv2.VideoCapture(video_path)
 
         # Grab the first frame for board localization
@@ -128,8 +132,8 @@ def testCode(model) :
             cv2.imshow("Live Chess Matrix Tracker", live_display)
             
             # Intercept keyboard keys
-            key = cv2.waitKey(60) & 0xFF
-            # key = cv2.waitKey(20) & 0xFF
+            # key = cv2.waitKey(60) & 0xFF
+            key = cv2.waitKey(20) & 0xFF
 
             # paused = True
             

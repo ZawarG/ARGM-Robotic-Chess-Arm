@@ -9,9 +9,10 @@ from src.hardware.robot import RobotController
 # ( -.-)
 # o_(")(")
 # Chess board class adjusted to track the moves of two players (for testing)
+# Also added: calibration phase
 
 class GameState(Enum):
-    INITIALIZING = auto()
+    WAITING_FOR_START = auto() # Waiting until board occupancy matches initial game occupancy
     HUMAN_MOVING = auto()
     ROBOT_MOVING = auto()
     ANIMATING_MOVE = auto()
@@ -19,10 +20,10 @@ class GameState(Enum):
     WAITING_FOR_MOVE = auto()
 
 class ChessBoard:
-    def __init__(self, coord, bot_is_white, warped_img, M):
+    def __init__(self, coord, bot_is_white, warped_img, M, is_board_empty=False):
         # Initialize components
         self.vision = BoardVision(coord, bot_is_white)
-        self.vision.initializeBoard(warped_img, M)
+        self.vision.initializeBoard(warped_img, M, is_board_empty=is_board_empty)
 
         self.board = chess.Board()
         self.engine = chess.engine.SimpleEngine.popen_uci("/opt/homebrew/bin/stockfish")
@@ -41,11 +42,17 @@ class ChessBoard:
         if img is not None:
             self.vision.updateFrame(img)
         
+        # Visualizer rendering
         if self.state == GameState.ANIMATING_MOVE:
             self.__handleAnimating()
         else:
             self.visualizer.update()
 
+        # Game set up phase
+        if self.state == GameState.WAITING_FOR_START:
+            self.__handleWaitingForStart()
+
+        # Standard game loop
         if self.state == GameState.WAITING_FOR_MOVE:
             self.__handleTrackBoard()
         if self.state == GameState.HUMAN_MOVING:
@@ -100,6 +107,22 @@ class ChessBoard:
             # Mid-move or noise, stay tracking
             self.state = GameState.WAITING_FOR_MOVE
 
+    def __handleWaitingForStart(self):
+        stabilized_observed = self.vision.getStabilizedOccupancy()
+        
+        # Wait until feed stabilizes
+        if stabilized_observed is None:
+            return
+        
+        # Check if board is at initial state (changed will be empty)
+        changed = self.getChangedSquares(stabilized_observed)
+
+        if not changed:
+            # Transition to the first turn
+            if self.bot_is_white:
+                self.state = GameState.ROBOT_MOVING
+            else:
+                self.state = GameState.WAITING_FOR_MOVE
 
     def __handleHumanMoving(self):
         stabilized_observed = self.vision.getStabilizedOccupancy()
@@ -164,6 +187,8 @@ class ChessBoard:
     # Changed squares -> legal chess move
     def detectMove(self, changed):
         if len(changed) == 0: # No move
+            return None
+        if len(changed)>3: # Impossible (likely a hand is covering the board)
             return None
         
         print([chess.square_name(s) for s in changed])

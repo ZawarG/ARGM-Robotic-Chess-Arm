@@ -30,7 +30,7 @@ class BoardVision:
         hsv = utils.adjustSquare(isolated_square)
         return hsv
 
-    def initializeBoard(self, img, M):
+    def initializeBoard(self, img, M, is_board_empty=False):
         self.warped_img = img
         self.M = M
 
@@ -52,16 +52,22 @@ class BoardVision:
                 square_object = ChessSquare(hsv_img, row, col, file, rank)
                 self.squares[row][col] = square_object
 
-                square_means.append(np.mean(hsv_img))
+                square_means.append(np.mean(hsv_img, axis=(0, 1)))
 
                 # Calculate base light/dark colour
-                if row in [2, 3, 4, 5]:
-                    square_object.setOccupancy(False)
-
+                if is_board_empty:
                     if square_object.is_light_square:
                         light_squares.append(hsv_img)
                     else:
                         dark_squares.append(hsv_img)
+                else:
+                    if row in [2, 3, 4, 5]:
+                        square_object.setOccupancy(False)
+
+                        if square_object.is_light_square:
+                            light_squares.append(hsv_img)
+                        else:
+                            dark_squares.append(hsv_img)
 
         # Convert lists to numpy arrays (prevents calculation error)
         light_squares = np.array(light_squares)
@@ -95,14 +101,13 @@ class BoardVision:
             for col in range(8):
                 square = self.squares[row][col]
                 hsv_img = self._getSquareImage(img, row, col)
-                square_means.append(np.mean(hsv_img))
+
                 square_data.append((square, hsv_img))
+                square_means.append(np.mean(hsv_img, axis=(0, 1)))
 
         square_means = np.array(square_means)
         self.light_profile['curr_hsv'] = np.median(square_means)
         self.dark_profile['curr_hsv'] = np.median(square_means)
-
-        print(self.light_profile['curr_hsv'], self.light_profile['curr_hsv']/self.light_profile['avg_hsv']*0.02)
 
         for square, square_img in square_data:
             profile = self.light_profile if square.is_light_square else self.dark_profile
