@@ -9,7 +9,7 @@ A robotic chess system that detects board state from a camera feed, tracks moves
 2. YOLO-assisted board detection locates the board
    If this fails, a manual calibration window prompts the user to input the chess board corners
 3. OpenCV warps the board and segments it into squares
-4. Occupancy changes between consecutive board states are analyzed to infer player moves
+4. Engine analyzes square occupancy changes between consecutive board states to infer player moves
 5. Moves are validated and tracked in software
 6. Stockfish generates a response move
 7. Future versions transmit validated moves to a custom robotic arm for physical execution
