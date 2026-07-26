@@ -1,7 +1,7 @@
 # ARGM — Artificial Robotic GrandMaster
 
 ## Overview
-A robotic chess system that detects board state from a camera feed, tracks moves through square occupancy changes, interfaces with a chess engine, and ultimately controls a robotic arm to execute physical moves.
+An autonomous chess-playing robot that combines computer vision, state estimation, and robotic manipulation to detect human moves, interface with Stockfish, and execute physical responses using a custom robotic arm.
 > The system is currently capable of detecting board state, tracking moves, and visualizing gameplay in real time using Stockfish.
 
 ## How It Works
@@ -103,7 +103,10 @@ Game Loop (FSM)
 - Synchronizing physical and digital game states
 
 ## Future Work
-- Improve detection accuracy with custom-trained dataset
+- Eliminate the empty-board calibration requirement
+- Support direct board-state recognition from camera input
+- Migrate software architecture to ROS 2 for scalable robot integration
+- Improve detection accuracy under varying lighting and camera angles
 
 ## Team
 This project is being developed by:
