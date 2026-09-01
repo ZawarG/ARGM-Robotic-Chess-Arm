@@ -89,7 +89,7 @@ def testCode(model) :
         debugger.displaySquares(game.vision)
 
     else:
-        video_path = "Chessboard Image Detection/data/videos/starts_empty.mov"
+        video_path = "Chessboard Image Detection/data/videos/starts_occupied.mov"
         cap = cv2.VideoCapture(video_path)
 
         # Grab the first frame for board localization
@@ -142,7 +142,7 @@ def testCode(model) :
             cv2.imshow("Live Chess Matrix Tracker", live_display)
 
             # Intercept keyboard keys
-            key = cv2.waitKey(20) & 0xFF
+            key = cv2.waitKey(1) & 0xFF
 
             if key == ord('s') and not game.started:  # 'S' calibrates + starts the game
                 game.beginGame(img)  # uses the CURRENT frame (pieces in place)

@@ -41,6 +41,7 @@ def runInitialCalibration(img, source_pts, board_size=800):
 
     cv2.imshow("Outer corners", debug)
     cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
     M = getPerspectiveMatrix(source_pts, board_size)
     coords = generateGridCoordinates(board_size)
@@ -231,5 +232,6 @@ def detectContourArea(z, square, show=False):
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
         cv2.imshow("Fill Area", display)
         cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
     return fill_ratio

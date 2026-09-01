@@ -202,7 +202,7 @@ class ChessBoard:
     def detectMove(self, changed):
         if len(changed) == 0: # No move
             return None
-        if len(changed)>3: # Impossible (likely a hand is covering the board)
+        if len(changed) > 4: # Impossible (likely a hand is covering the board)
             return None
         
         print([chess.square_name(s) for s in changed])
@@ -214,15 +214,30 @@ class ChessBoard:
             # Only squares whose occupancy changes should appear in changed
             # The from square always becomes empty
             # The to square could have gone from empty-occupied or occupied-occupied
-            move_squares = {move.from_square, move.to_square}
+            move_squares = {move.from_square}
 
             print(move, move_squares)
 
-            # en passent
+            # en passent: 
+            # pawn lands on an empty square (so to flips)
+            # captured pawn sits on a separate square that becomes empty
             if self.board.is_en_passant(move):
-                captured_square = chess.square(chess.square_file(move.to_square), chess.square_rank(move.from_square))
+                captured_square = chess.square(chess.square_file(move.to_square), 
+                                                chess.square_rank(move.from_square))
+                move_squares.add(move.to_square)
                 move_squares.add(captured_square)
-            # castling
+            # normal capture: 
+            # destination was already occupied and stays occupie
+            # its occupancy does not change. do not expect it in change
+            elif self.board.is_capture(move):
+                pass
+            # regular move: 
+            # destination goes from empty to occupied
+            else:
+                move_squares.add(move.to_square)
+
+            # castling:
+            # rook moves between two squares that both flip
             if self.board.is_castling(move):
                 rank = chess.square_rank(move.from_square)
                 if move.to_square > move.from_square: # kingside
@@ -233,7 +248,8 @@ class ChessBoard:
                     rook_to   = chess.square(3, rank) # rook destination
                 move_squares.add(rook_from)
                 move_squares.add(rook_to)
-            # ! What to do for promotion?
+            
+            # ! What to do for promotion? -- user input
             if move_squares <= observed_squares:
                 possible_moves.append(move)
         
@@ -276,7 +292,7 @@ class ChessBoard:
         for row in range(8):
             for col in range(8):
                 if stabilized_observed[row][col] != engine_occ[row][col]:
-                    changed.append(chess.square(col, row))
+                    changed.append(chess.parse_square(self.vision.squares[row][col].name))
 
         return changed
     
