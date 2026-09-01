@@ -26,9 +26,11 @@ class BoardVision:
             int(top_left[1]):int(bottom_right[1]), 
             int(top_left[0]):int(bottom_right[0])
         ]
-        return isolated_square
 
-    def initializeBoard(self, img, M):
+        hsv = utils.adjustSquare(isolated_square)
+        return hsv
+
+    def initializeBoard(self, img, M, is_board_empty=False):
         self.warped_img = img
         self.M = M
 
@@ -46,21 +48,26 @@ class BoardVision:
                 rank = ranks[row] if self.bot_is_white else ranks[7-row]
 
                 # Retrieve and store chess square
-                square_img = self._getSquareImage(img, row, col)
-                square_object = ChessSquare(square_img, row, col, file, rank)
+                hsv_img = self._getSquareImage(img, row, col)
+                square_object = ChessSquare(hsv_img, row, col, file, rank)
                 self.squares[row][col] = square_object
 
-                crop_img = utils.adjustSquare(square_img)
-                square_means.append(np.mean(crop_img))
+                square_means.append(np.mean(hsv_img, axis=(0, 1)))
 
                 # Calculate base light/dark colour
-                if row in [2, 3, 4, 5]:
-                    square_object.setOccupancy(False)
-
+                if is_board_empty:
                     if square_object.is_light_square:
-                        light_squares.append(crop_img)
+                        light_squares.append(hsv_img)
                     else:
-                        dark_squares.append(crop_img)
+                        dark_squares.append(hsv_img)
+                else:
+                    if row in [2, 3, 4, 5]:
+                        square_object.setOccupancy(False)
+
+                        if square_object.is_light_square:
+                            light_squares.append(hsv_img)
+                        else:
+                            dark_squares.append(hsv_img)
 
         # Convert lists to numpy arrays (prevents calculation error)
         light_squares = np.array(light_squares)
@@ -69,17 +76,24 @@ class BoardVision:
 
         # Calculate base profiles for empty squares
         self.light_profile = {
-            'avg_sq': np.mean(light_squares, axis=0).astype(np.uint8),
+            'avg_sq': np.mean(light_squares, axis=0).astype(np.float32),
             'std_sq': np.maximum(np.std(light_squares, axis=0), 1e-7),
-            'avg_bright': np.median(square_means),
-            'curr_bright': np.median(square_means)
+            'avg_hsv': np.median(square_means),
+            'curr_hsv': np.median(square_means)
         }
         self.dark_profile = {
-            'avg_sq': np.mean(dark_squares, axis=0).astype(np.uint8),
+            'avg_sq': np.mean(dark_squares, axis=0).astype(np.float32),
             'std_sq': np.maximum(np.std(dark_squares, axis=0), 1e-7),
-            'avg_bright': np.median(square_means), 
-            'curr_bright': np.median(square_means)
+            'avg_hsv': np.median(square_means), 
+            'curr_hsv': np.median(square_means)
         }
+
+    # Warps a raw frame (same pipeline as updateFrame) and builds the light/dark
+    # reference profiles from it. Use this to calibrate from a live/populated frame.
+    def calibrate(self, raw_img, M, is_board_empty=False):
+        img_small = utils.makeImageSmall(raw_img)
+        warped = utils.warpFrame(img_small, M)
+        self.initializeBoard(warped, M, is_board_empty=is_board_empty)
 
     # Takes a raw unwarped video frame, crops and warps it, and extracts the squares
     def updateFrame(self, raw_img):
@@ -93,14 +107,14 @@ class BoardVision:
         for row in range(8):
             for col in range(8):
                 square = self.squares[row][col]
-                square_img = self._getSquareImage(img, row, col)
-                crop_img = utils.adjustSquare(square_img)
-                square_means.append(np.mean(crop_img))
-                square_data.append((square, square_img))
+                hsv_img = self._getSquareImage(img, row, col)
+
+                square_data.append((square, hsv_img))
+                square_means.append(np.mean(hsv_img, axis=(0, 1)))
 
         square_means = np.array(square_means)
-        self.light_profile['curr_bright'] = np.mean(square_means)
-        self.dark_profile['curr_bright'] = np.mean(square_means)
+        self.light_profile['curr_hsv'] = np.median(square_means)
+        self.dark_profile['curr_hsv'] = np.median(square_means)
 
         for square, square_img in square_data:
             profile = self.light_profile if square.is_light_square else self.dark_profile
@@ -119,7 +133,7 @@ class BoardVision:
         # Find mode
         array = np.array(self.occupancy_buffer)
         sum_matrix = np.sum(array, axis = 0)
-        mode_matrix = (sum_matrix >= 5).tolist()
+        mode_matrix = (sum_matrix >= STABILITY_THRESHOLD//2).tolist()
 
         # Flush buffer
         self.occupancy_buffer = []
