@@ -1,6 +1,5 @@
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt
 
 #  (\(\
 # ( -.-)
@@ -33,6 +32,16 @@ def warpFrame(img, M, board_size=800):
     return cv2.warpPerspective(img, M, (board_size, board_size))
 
 def runInitialCalibration(img, source_pts, board_size=800):
+    debug = img.copy()
+
+    for i, p in enumerate(source_pts.astype(int)):
+        cv2.circle(debug, tuple(p), 8, (0,0,255), -1)
+        cv2.putText(debug, str(i), tuple(p), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7, (255,0,0), 2)
+
+    cv2.imshow("Outer corners", debug)
+    cv2.waitKey(0)
+
     M = getPerspectiveMatrix(source_pts, board_size)
     coords = generateGridCoordinates(board_size)
     warped_img = warpFrame(img, M, board_size)
@@ -40,34 +49,34 @@ def runInitialCalibration(img, source_pts, board_size=800):
     return M, coords, warped_img
 
 # Square extraction
+def orderPoints(points):
+    rect = np.zeros((4, 2), dtype="float32")
+    s = points.sum(axis=1)
+    rect[0] = points[np.argmin(s)]   # Top-left
+    rect[2] = points[np.argmax(s)]   # Bottom-right
+
+    diff = np.diff(points, axis=1)
+    rect[1] = points[np.argmin(diff)] # Top-right
+    rect[3] = points[np.argmax(diff)] # Bottom-left
+    return rect
+
 def extractOuterCorners(corners):
     # Reshape 1D array to 3D grid[row][col][x,y]
     grid = corners.reshape(7,7,2)
-
-    # Fix orientation (rotate grid until top-left square has smallest coordinates)
-    count = 0
-    while count < 4:
-        tl = grid[0, 0]
-        bl = grid[6, 0]
-        tr = grid[0,6]
-
-        if (tl[0] + tl[1] > tr[0] + tr[1] or tl[0] + tl[1] > bl[0] + bl[1]):
-            grid = np.rot90(grid)
-            count += 1
-        else:
-            break
     
     # Calculate average distance between each square (intervals between 7 corners = 6)
     x_dist = (grid[0,6]-grid[0,0])/6
     y_dist = (grid[6,0]-grid[0,0])/6
 
     # Retrieve four corners
-    top_left = grid[0,0] - x_dist - y_dist
-    top_right = grid[0,6] + x_dist - y_dist
-    bottom_left = grid[6,0] - x_dist + y_dist
-    bottom_right = grid[6,6] + x_dist + y_dist
+    raw_edges = np.array([
+        grid[0, 0] - x_dist - y_dist,
+        grid[0, 6] + x_dist - y_dist,
+        grid[6, 6] + x_dist + y_dist,
+        grid[6, 0] - x_dist + y_dist
+    ], dtype="float32")
 
-    return np.array([top_left, top_right, bottom_right, bottom_left], dtype="float32")
+    return orderPoints(raw_edges)
 
 # Board detection
 def detectSquares(img):
@@ -131,12 +140,16 @@ def preprocessImage(img, border_high=15, testing=False):
 
     return res
 
-def cropImage(img, model):
+def cropImageToBoard(img, model):
     results = model(img)[0]
-    
+
     if not results:
         print("Board not detected by model")
-        return img
+        return img, (0, 0)
+
+    # annotated = results.plot()
+    # cv2.imshow("YOLO Detection", annotated)
+    # cv2.waitKey(1)
 
     # Extract location
     box = results.boxes[0]
@@ -146,7 +159,8 @@ def cropImage(img, model):
     # Crop image to board
     cropped = img[y1:y2, x1:x2]
 
-    return cropped
+    # Return crop origin so detected corners can be mapped back to the full (uncropped) image space
+    return cropped, (x1, y1)
 
 def makeImageSmall(img):
     display_height = 800 
@@ -160,58 +174,62 @@ def adjustSquare(img, border_ratio=0.1):
     # Crop
     height, width = img.shape[:2]
     b_top_height = int(height * border_ratio)
-    b_bot_height = int(height * border_ratio * 3) #  Double crop at bottom to account for how piece tops overlapping due camera angle
+    b_bot_height = int(height * border_ratio * 4) # Crop bottom extra to account for how piece tops overlapping due camera angle
     b_width = int(width * border_ratio)
     img = img[b_top_height:height-b_bot_height, b_width:width-b_width] 
 
     # Detect average brightness and std
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
-    return gray
+    return hsv
 
-def checkOccupancy(square, profile, name, FILL_THRESH = 0.03):
-    gray = adjustSquare(square)
+def checkOccupancy(square, profile, name, FILL_THRESH = 0.3):
+    # Retrieve hsv offset
+    start_frame_bright = profile['avg_hsv']
+    curr_frame_bright = profile['curr_hsv']
+    hsv_offset = curr_frame_bright - start_frame_bright # Accounts for exposure changes during game
 
-    # Retrieve brightness offset
-    start_frame_bright = profile['avg_bright']
-    curr_frame_bright = profile['curr_bright']
-    brightness_offset = curr_frame_bright - start_frame_bright # Accounts for exposure changes during game
-
-    # Retrieve profile variables
-    avg_sq = profile['avg_sq'] + brightness_offset
+    # Retrieve profile variables, adjust hsv dynamically
+    avg_sq = profile['avg_sq'] + hsv_offset
     std_sq = profile['std_sq']
-    
-    # Calculate z-score
-    fill_z = np.abs(gray.astype(np.float32) - avg_sq) / (std_sq + 1)
+
+    # Calculate z-score differences per channel
+    z_channels = np.abs(square.astype(np.float32) - avg_sq) / (std_sq + 1)
+
+    # Calculate 3D Euclidean distance including all channels
+    fill_z = np.sqrt(np.sum(np.square(z_channels), axis=2))
 
     # Detect contour area and shape
-    fill_ratio = detectContourArea(fill_z)
+    fill_ratio = detectContourArea(fill_z, square)
 
-    if name=='h6':
-        print(name, fill_ratio, fill_ratio>FILL_THRESH, curr_frame_bright, start_frame_bright)
+    # Create threshold for fill area
+    hsv_ratio = curr_frame_bright/start_frame_bright
+    adaptive_fill_thresh = FILL_THRESH*hsv_ratio
 
-    return fill_ratio > FILL_THRESH
+    return fill_ratio > adaptive_fill_thresh
 
-def detectContourArea(z):
-    mask = (z > 3).astype(np.uint8) * 255
-
+def detectContourArea(z, square, show=False):
+    mask = (z > 3.25).astype(np.uint8) * 255
     kernel = np.ones((5,5), np.uint8)
-
-    mask = cv2.morphologyEx(
-        mask,
-        cv2.MORPH_CLOSE,
-        kernel
-    )
-
+    mask = cv2.morphologyEx(mask,cv2.MORPH_CLOSE,kernel)
     kernel2 = np.ones((3,3), np.uint8)
+    mask = cv2.morphologyEx(mask,cv2.MORPH_OPEN,kernel2)
 
-    mask = cv2.morphologyEx(
-        mask,
-        cv2.MORPH_OPEN,
-        kernel2
-    )
+    fill_area = np.count_nonzero(mask)
+    fill_ratio = fill_area / mask.size
 
-    fill_ratio = np.count_nonzero(mask) / mask.size
+    # weight = gaussian(center)
+    # weighted_fill = np.sum(mask * weight)
+
+    if show:
+        bgr_img = cv2.cvtColor(square, cv2.COLOR_HSV2BGR)
+        overlay = bgr_img.copy()
+        overlay[mask > 0] = (0, 0, 255)
+        display = cv2.addWeighted(bgr_img, 0.7, overlay, 0.3, 0)
+
+        cv2.putText(display, f"Area: {fill_area}", (5, 20), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+        cv2.imshow("Fill Area", display)
+        cv2.waitKey(0)
 
     return fill_ratio
-

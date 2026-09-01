@@ -12,7 +12,8 @@ import numpy as np
 
 # Draws a red (occupied) or green (empty) for each square on top of the warped image
 def drawOccupancyOverlay(board_vision):
-    img = board_vision.warped_img
+    img = board_vision.warped_img.copy()
+    cv2.imshow('img', img)
     coords = board_vision.coord
 
     # 1. Draw the 9x9 Grid Lines
@@ -46,6 +47,15 @@ def drawOccupancyOverlay(board_vision):
                 if square is not None:
                     # Call the occupancy check function from your utils/square logic
                     is_occupied = square.getOccupancy() 
+
+                    profile = board_vision.light_profile if square.is_light_square else board_vision.dark_profile
+                    hsv_offset = profile['curr_hsv'] - profile['avg_hsv']
+
+                    adjusted_avg = profile['avg_sq'] + hsv_offset
+                    z_channels = (square.image.astype(np.float32) - adjusted_avg) / (profile['std_sq'] + 1)
+                    z_euclidean = np.sqrt(np.sum(np.square(z_channels), axis=2))
+
+                    fill = utils.detectContourArea(z_euclidean, None, show=False)
                     
                     # BGR Colors: Red if occupied, Green if empty
                     color = (0, 0, 255) if is_occupied else (0, 255, 0)
@@ -54,7 +64,7 @@ def drawOccupancyOverlay(board_vision):
                     cv2.circle(img, center_pt, 8, color, -1)
                     
                     # Optional: Overlay text showing the chess notation (e.g., "e4")
-                    label = square.name
+                    label = f"{square.name},{fill:.3f}"
                     cv2.putText(img, label, (center_x - 10, center_y + 20), 
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
 
@@ -83,18 +93,17 @@ def displaySquares(vision):
                 ax.axis('off')
                 continue
                 
-            img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            img_rgb = cv2.cvtColor(img, cv2.COLOR_HSV2RGB)
             ax.imshow(img_rgb)
 
-            gray = utils.adjustSquare(img)
             profile = light_prof if square.is_light_square else dark_prof
             occupied = square.getOccupancy()
             color = 'red' if occupied else 'green'
 
-            brightness_offset = profile['curr_bright'] - profile['avg_bright']
+            brightness_offset = profile['curr_hsv'] - profile['avg_hsv']
 
-            z = np.abs(gray.astype(np.float32) - profile['avg_sq'] - brightness_offset) / (profile['std_sq'] + 1) 
-            fill = utils.detectContourArea(z)
+            z = np.abs(img.astype(np.float32) - profile['avg_sq'] - brightness_offset) / (profile['std_sq'] + 1) 
+            fill = utils.detectContourArea(z, None, show=False)
 
             # 3. Visual Feedback
             rect = patches.Rectangle(
