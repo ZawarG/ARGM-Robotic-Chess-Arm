@@ -45,16 +45,11 @@ def main():
     cam.release()
 
 def runCalibration(img, model):
-    # Crop and preprocess
     img_small = utils.makeImageSmall(img)
-    img_cropped = utils.cropImageToBoard(img_small, model)
+    img_cropped = utils.cropImageToBoard(img_small, model) # Detect board using YOLO
+
+    # Attempt automatic detection and extract corners
     img_mask = utils.preprocessImage(img_cropped)
-
-    cv2.imshow("small", img_small)
-    cv2.imshow("cropped", img_cropped)
-    cv2.imshow("mask", img_mask)
-
-    # Attempt automatic detection
     board_detected, corners = utils.detectSquares(img_mask) 
 
     # Manual detection if automatic fails
@@ -79,11 +74,11 @@ def testCode(model) :
         # Detect board
         board_detected, board_coord, warped_img, M = runCalibration(img, model)
 
-        if board_detected is None:
+        if not board_detected:
             return
         
-        # Initialize game
-        game = ChessBoard(board_coord, playerIsBlack, warped_img, M)
+        # Initialize game (single image: calibrate immediately from this frame)
+        game = ChessBoard(board_coord, playerIsBlack, M, warped_img=warped_img)
 
         debugger.displaySquares(game.vision)
 
@@ -101,53 +96,59 @@ def testCode(model) :
         # player_colour = calibration.askPlayerColour()
         playerIsBlack = True # Player is black
 
-        # Detect board
+        # Localize the board on the EMPTY board (corner/grid detection needs it empty)
         board_detected, board_coord, warped_img, M = runCalibration(img, model)
 
         if board_detected is None:
             return
 
-        # Initialize game
-        game = ChessBoard(board_coord, playerIsBlack, warped_img, M)
+        # Build the game, but DON'T calibrate occupancy yet
+        # The light/dark reference profiles need the populated board, which the user sets up next
+        game = ChessBoard(board_coord, playerIsBlack, M)
 
         paused = False
 
-        loops = 0
-
         while True:
-            # If not paused, capture a new frame and update the engine
+            # If not paused, capture a new frame
             if not paused:
                 ret, img = cap.read()
-                if not ret: 
+                if not ret:
                     break
 
-                winner = game.update(img)
-                if winner is not None:
-                    print("game over")
+            if not game.started:
+                # Setup phase: 
+                # Show the live warped feed so the user can place the pieces
+                # Press 'S' to calibrate from this frame and start.
+                warped = utils.warpFrame(utils.makeImageSmall(img), M)
+                live_display = warped.copy()
+                cv2.putText(live_display, "Set up pieces, then press S to start",
+                            (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            else:
+                # Game phase: update engine, then draw the occupancy overlay
+                if not paused:
+                    winner = game.update(img)
+                    if winner is not None:
+                        print("game over")
 
-            # Generate live overlay display using the latest warped frame and stabilized matrix
-            live_display = debugger.drawOccupancyOverlay(game.vision)
-            
+                live_display = debugger.drawOccupancyOverlay(game.vision)
+
             # Show live video window
             cv2.imshow("Live Chess Matrix Tracker", live_display)
-            
+
             # Intercept keyboard keys
-            # key = cv2.waitKey(60) & 0xFF
             key = cv2.waitKey(20) & 0xFF
 
-            # paused = True
-            
-            if key == ord(' '):  # SPACEBAR toggles pause/play
+            if key == ord('s') and not game.started:  # 'S' calibrates + starts the game
+                game.beginGame(img)  # uses the CURRENT frame (pieces in place)
+                print("Game started")
+
+            elif key == ord(' '):  # SPACEBAR toggles pause/play
                 paused = not paused
                 print("Status:", "PAUSED" if paused else "PLAYING")
-                
+
             elif key == ord('q'):  # 'Q' quits the stream
                 break
 
-            # loops+=1
-            # if loops % 5 == 0:
-            #     print(loops)
-            #     debugger.displaySquares(game.vision)
         game.close()
         cap.release()
         cv2.destroyAllWindows()

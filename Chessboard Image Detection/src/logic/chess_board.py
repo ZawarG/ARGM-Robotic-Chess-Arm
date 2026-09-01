@@ -20,10 +20,18 @@ class GameState(Enum):
     WAITING_FOR_MOVE = auto()
 
 class ChessBoard:
-    def __init__(self, coord, bot_is_white, warped_img, M, is_board_empty=False):
+    def __init__(self, coord, bot_is_white, M, warped_img=None, is_board_empty=False):
         # Initialize components
         self.vision = BoardVision(coord, bot_is_white)
-        self.vision.initializeBoard(warped_img, M, is_board_empty=is_board_empty)
+        self.M = M
+
+        # Occupancy profiles only make sense once the pieces are on the board.
+        # If a warped frame is supplied up front, calibrate now (single-image test path). 
+        # Otherwise defer until beginGame() is called, i.e. after the user has set up the pieces and pressed the start key.
+        self.started = False
+        if warped_img is not None:
+            self.vision.initializeBoard(warped_img, M, is_board_empty=is_board_empty)
+            self.started = True
 
         self.board = chess.Board()
         self.engine = chess.engine.SimpleEngine.popen_uci("/opt/homebrew/bin/stockfish")
@@ -36,7 +44,13 @@ class ChessBoard:
         self.state = GameState.WAITING_FOR_MOVE
         self.pending_push_move = None
         self.last_move_by_human = False
-        
+
+    # Calibrate occupancy profiles from the current (populated) frame, then start play.
+    # Call this once the pieces are set up, e.g. on a keypress.
+    def beginGame(self, raw_img, is_board_empty=False):
+        self.vision.calibrate(raw_img, self.M, is_board_empty=is_board_empty)
+        self.started = True
+
     # FSM state updater
     def update(self, img):
         if img is not None:
@@ -217,7 +231,7 @@ class ChessBoard:
                 move_squares.add(rook_from)
                 move_squares.add(rook_to)
             # ! What to do for promotion?
-            if move_squares in observed_squares:
+            if move_squares <= observed_squares:
                 possible_moves.append(move)
         
         print('possible moves', possible_moves)

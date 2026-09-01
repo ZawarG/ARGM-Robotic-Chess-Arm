@@ -1,6 +1,5 @@
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt
 
 #  (\(\
 # ( -.-)
@@ -30,10 +29,19 @@ def generateGridCoordinates(board_size=800):
     return coords
 
 def warpFrame(img, M, board_size=800):
-    print(img.shape[0], img.shape[1])
     return cv2.warpPerspective(img, M, (board_size, board_size))
 
 def runInitialCalibration(img, source_pts, board_size=800):
+    debug = img.copy()
+
+    for i, p in enumerate(source_pts.astype(int)):
+        cv2.circle(debug, tuple(p), 8, (0,0,255), -1)
+        cv2.putText(debug, str(i), tuple(p), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7, (255,0,0), 2)
+
+    cv2.imshow("Outer corners", debug)
+    cv2.waitKey(0)
+
     M = getPerspectiveMatrix(source_pts, board_size)
     coords = generateGridCoordinates(board_size)
     warped_img = warpFrame(img, M, board_size)
@@ -41,34 +49,34 @@ def runInitialCalibration(img, source_pts, board_size=800):
     return M, coords, warped_img
 
 # Square extraction
+def orderPoints(points):
+    rect = np.zeros((4, 2), dtype="float32")
+    s = points.sum(axis=1)
+    rect[0] = points[np.argmin(s)]   # Top-left
+    rect[2] = points[np.argmax(s)]   # Bottom-right
+
+    diff = np.diff(points, axis=1)
+    rect[1] = points[np.argmin(diff)] # Top-right
+    rect[3] = points[np.argmax(diff)] # Bottom-left
+    return rect
+
 def extractOuterCorners(corners):
     # Reshape 1D array to 3D grid[row][col][x,y]
     grid = corners.reshape(7,7,2)
-
-    # Fix orientation (rotate grid until top-left square has smallest coordinates)
-    count = 0
-    while count < 4:
-        tl = grid[0, 0]
-        bl = grid[6, 0]
-        tr = grid[0,6]
-
-        if (tl[0] + tl[1] > tr[0] + tr[1] or tl[0] + tl[1] > bl[0] + bl[1]):
-            grid = np.rot90(grid)
-            count += 1
-        else:
-            break
     
     # Calculate average distance between each square (intervals between 7 corners = 6)
     x_dist = (grid[0,6]-grid[0,0])/6
     y_dist = (grid[6,0]-grid[0,0])/6
 
     # Retrieve four corners
-    top_left = grid[0,0] - x_dist - y_dist
-    top_right = grid[0,6] + x_dist - y_dist
-    bottom_left = grid[6,0] - x_dist + y_dist
-    bottom_right = grid[6,6] + x_dist + y_dist
+    raw_edges = np.array([
+        grid[0, 0] - x_dist - y_dist,
+        grid[0, 6] + x_dist - y_dist,
+        grid[6, 6] + x_dist + y_dist,
+        grid[6, 0] - x_dist + y_dist
+    ], dtype="float32")
 
-    return np.array([top_left, top_right, bottom_right, bottom_left], dtype="float32")
+    return orderPoints(raw_edges)
 
 # Board detection
 def detectSquares(img):
@@ -158,7 +166,6 @@ def makeImageSmall(img):
     scale = display_height / img.shape[0]
     display_width = int(img.shape[1] * scale)
     img_small = cv2.resize(img, (display_width, display_height))
-    print(img_small.shape[0], img_small.shape[1])
     return img_small
 
 # Square occupancy

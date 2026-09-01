@@ -2,22 +2,12 @@ import cv2
 import numpy as np
 import tkinter as tk
 from tkinter import ttk
+import src.vision.utils as utils
 
 #  (\(\
 # ( -.-)
 # o_(")(")
 # This file contains calibration functions, used to either manually determine the location of the board or the player colour
-
-def orderPoints(points):
-    rect = np.zeros((4, 2), dtype="float32")
-    s = points.sum(axis=1)
-    rect[0] = points[np.argmin(s)]   # Top-left
-    rect[2] = points[np.argmax(s)]   # Bottom-right
-
-    diff = np.diff(points, axis=1)
-    rect[1] = points[np.argmin(diff)] # Top-right
-    rect[3] = points[np.argmax(diff)] # Bottom-left
-    return rect
 
 def adjustImageManually(img):
     window_name = "Board Calibration"
@@ -96,7 +86,7 @@ def adjustImageManually(img):
 
         # Draw a polygon if we have 4 points to show the current board area
         if len(points) == 4:
-            pts_array = orderPoints(np.array(points))
+            pts_array = utils.orderPoints(np.array(points))
             cv2.polylines(canvas, [pts_array.astype(np.int32)], True, (0, 255, 255), 2)
 
         cv2.imshow(window_name, canvas)
@@ -114,7 +104,7 @@ def adjustImageManually(img):
     cv2.destroyWindow(window_name)
     
     # Sort and adjust points before returning
-    final_pts = orderPoints(np.array(points)) 
+    final_pts = utils.orderPoints(np.array(points)) 
     final_pts[:, 1] -= HEADER_H
     final_pts[:, 0] -= x_offset
 

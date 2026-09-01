@@ -12,7 +12,8 @@ import numpy as np
 
 # Draws a red (occupied) or green (empty) for each square on top of the warped image
 def drawOccupancyOverlay(board_vision):
-    img = board_vision.warped_img
+    img = board_vision.warped_img.copy()
+    cv2.imshow('img', img)
     coords = board_vision.coord
 
     # 1. Draw the 9x9 Grid Lines

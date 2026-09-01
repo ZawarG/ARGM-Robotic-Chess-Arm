@@ -88,6 +88,13 @@ class BoardVision:
             'curr_hsv': np.median(square_means)
         }
 
+    # Warps a raw frame (same pipeline as updateFrame) and builds the light/dark
+    # reference profiles from it. Use this to calibrate from a live/populated frame.
+    def calibrate(self, raw_img, M, is_board_empty=False):
+        img_small = utils.makeImageSmall(raw_img)
+        warped = utils.warpFrame(img_small, M)
+        self.initializeBoard(warped, M, is_board_empty=is_board_empty)
+
     # Takes a raw unwarped video frame, crops and warps it, and extracts the squares
     def updateFrame(self, raw_img):
         img_small = utils.makeImageSmall(raw_img)
