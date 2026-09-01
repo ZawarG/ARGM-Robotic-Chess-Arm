@@ -211,4 +211,5 @@ __marimo__/
 .DS_Store
 
 # image detection data
-# /Chessboard Image Detection/data
+/Chessboard Image Detection/data/input
+/Chessboard Image Detection/data/videos
