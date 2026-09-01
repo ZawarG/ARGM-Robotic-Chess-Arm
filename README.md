@@ -41,7 +41,7 @@ After calibration, the board is split into an 8×8 grid and each square is class
 Square cropping is intentionally tight to improve per-square classification consistency.
 
 ### Digital Visualizer
-<img width="400" height="422" alt="Digital Chess Game Visualizer" src="https://github.com/user-attachments/assets/bc8d921f-1aa7-483a-a2b2-34497dbc55eb" />
+<img width="702" height="400" alt="Digital Chess Game Visualizer" src="https://github.com/user-attachments/assets/8169e92d-614f-4c94-95e1-9deeb25dd54d" />
 
 The visualizer mirrors the physical game state by replaying moves as they are detected and validated by the system. It serves as a debugging and verification tool for board-state tracking and Stockfish integration.
 
