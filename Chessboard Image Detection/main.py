@@ -1,4 +1,5 @@
 import cv2
+import numpy as np
 from ultralytics import YOLO
 from src.logic.chess_board import ChessBoard
 import src.vision.utils as utils
@@ -45,20 +46,25 @@ def main():
     cam.release()
 
 def runCalibration(img, model):
-    img_small = utils.makeImageSmall(img)
-    img_cropped = utils.cropImageToBoard(img_small, model) # Detect board using YOLO
+    img_small = utils.makeImageSmall(img) # Reduce size of image
+    img_cropped, (offset_x, offset_y) = utils.cropImageToBoard(img_small, model) # Detect/crop to board using YOLO
 
     # Attempt automatic detection and extract corners
     img_mask = utils.preprocessImage(img_cropped)
-    board_detected, corners = utils.detectSquares(img_mask) 
+    board_detected, corners = utils.detectSquares(img_mask)
+
+    # Map corners from the tight YOLO crop back into full img_small space.
+    # extractOuterCorners can land outside the tight crop
+    # Warping img_small with an offset ensures that perspective transform doesn't sample out-of-bounds regions.
+    if board_detected:
+        corners = corners + np.array([offset_x, offset_y], dtype=corners.dtype)
 
     # Manual detection if automatic fails
     if not board_detected:
         print("Automatic detection failed. Opening manual calibration.")
         board_detected, corners = calibration.adjustImageManually(img_small)
-        img_cropped = img_small
 
-    M, coords, warped_img = utils.runInitialCalibration(img_cropped, corners)
+    M, coords, warped_img = utils.runInitialCalibration(img_small, corners)
 
     return board_detected, coords, warped_img, M
 

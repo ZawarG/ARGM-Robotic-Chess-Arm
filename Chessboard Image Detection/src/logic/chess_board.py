@@ -211,6 +211,9 @@ class ChessBoard:
         observed_squares = set(changed)
         
         for move in self.board.legal_moves:
+            # Only squares whose occupancy changes should appear in changed
+            # The from square always becomes empty
+            # The to square could have gone from empty-occupied or occupied-occupied
             move_squares = {move.from_square, move.to_square}
 
             print(move, move_squares)

@@ -142,11 +142,11 @@ def preprocessImage(img, border_high=15, testing=False):
 
 def cropImageToBoard(img, model):
     results = model(img)[0]
-    
+
     if not results:
         print("Board not detected by model")
-        return img
-    
+        return img, (0, 0)
+
     # annotated = results.plot()
     # cv2.imshow("YOLO Detection", annotated)
     # cv2.waitKey(1)
@@ -155,11 +155,12 @@ def cropImageToBoard(img, model):
     box = results.boxes[0]
     x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
     x1, y1, x2, y2 = map(int, [x1, y1, x2, y2]) # convert to int
-    
+
     # Crop image to board
     cropped = img[y1:y2, x1:x2]
-    
-    return cropped
+
+    # Return crop origin so detected corners can be mapped back to the full (uncropped) image space
+    return cropped, (x1, y1)
 
 def makeImageSmall(img):
     display_height = 800 
