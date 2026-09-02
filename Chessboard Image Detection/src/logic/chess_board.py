@@ -20,9 +20,9 @@ class GameState(Enum):
     WAITING_FOR_MOVE = auto()
 
 class ChessBoard:
-    def __init__(self, coord, bot_is_white, M, warped_img=None, is_board_empty=False):
+    def __init__(self, coord, M, warped_img=None):
         # Initialize components
-        self.vision = BoardVision(coord, bot_is_white)
+        self.vision = BoardVision(coord)
         self.M = M
 
         # Occupancy profiles only make sense once the pieces are on the board.
@@ -30,7 +30,7 @@ class ChessBoard:
         # Otherwise defer until beginGame() is called, i.e. after the user has set up the pieces and pressed the start key.
         self.started = False
         if warped_img is not None:
-            self.vision.initializeBoard(warped_img, M, is_board_empty=is_board_empty)
+            self.vision.initializeBoard(warped_img, M)
             self.started = True
 
         self.board = chess.Board()
@@ -39,7 +39,7 @@ class ChessBoard:
         self.visualizer = ChessVisualizer(self.board)
 
         # State management
-        self.bot_is_white = bot_is_white
+        self.bot_is_white = None
         # self.state = GameState.ROBOT_MOVING if self.bot_is_white else GameState.HUMAN_MOVING
         self.state = GameState.WAITING_FOR_MOVE
         self.pending_push_move = None
@@ -47,8 +47,8 @@ class ChessBoard:
 
     # Calibrate occupancy profiles from the current (populated) frame, then start play.
     # Call this once the pieces are set up, e.g. on a keypress.
-    def beginGame(self, raw_img, is_board_empty=False):
-        self.vision.calibrate(raw_img, self.M, is_board_empty=is_board_empty)
+    def beginGame(self, raw_img):
+        self.bot_is_white = self.vision.calibrate(raw_img, self.M)
         self.started = True
 
     # FSM state updater
@@ -282,7 +282,21 @@ class ChessBoard:
                     occ[row][col] = True
 
         return occ
-    
+
+    # Retrieve expected piece colours from chess engine (source of truth)
+    def getEngineSides(self):
+        sides = [[None for _ in range(8)] for _ in range(8)]
+
+        for visual_row in self.vision.squares:
+            for square_obj in visual_row:
+                row, col = square_obj.coord
+                piece = self.board.piece_at(chess.parse_square(square_obj.name))
+
+                if piece is not None:
+                    sides[row][col] = "White" if piece.color == chess.WHITE else "Black"
+
+        return sides
+
     # Detect changes
     def getChangedSquares(self, stabilized_observed):
         engine_occ = self.getEngineOccupancy()

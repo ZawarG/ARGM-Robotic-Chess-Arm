@@ -75,8 +75,6 @@ def testCode(model) :
         image_path = "Chessboard Image Detection/data/input/IMG_0302.jpg"
         img = cv2.imread(image_path)
 
-        playerIsBlack = False # Player is black
-
         # Detect board
         board_detected, board_coord, warped_img, M = runCalibration(img, model)
 
@@ -84,7 +82,7 @@ def testCode(model) :
             return
         
         # Initialize game (single image: calibrate immediately from this frame)
-        game = ChessBoard(board_coord, playerIsBlack, M, warped_img=warped_img)
+        game = ChessBoard(board_coord, M, warped_img=warped_img)
 
         debugger.displaySquares(game.vision)
 
@@ -98,19 +96,15 @@ def testCode(model) :
             print("Failed to read video")
             return
 
-        # Ask the user for their colour
-        # player_colour = calibration.askPlayerColour()
-        playerIsBlack = True # Player is black
-
         # Localize the board on the EMPTY board (corner/grid detection needs it empty)
         board_detected, board_coord, warped_img, M = runCalibration(img, model)
 
         if board_detected is None:
             return
 
-        # Build the game, but DON'T calibrate occupancy yet
+        # Build the game, but don't calibrate occupancy yet
         # The light/dark reference profiles need the populated board, which the user sets up next
-        game = ChessBoard(board_coord, playerIsBlack, M)
+        game = ChessBoard(board_coord, M)
 
         paused = False
 
