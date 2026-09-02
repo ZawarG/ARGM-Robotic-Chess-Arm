@@ -63,12 +63,57 @@ def drawOccupancyOverlay(board_vision):
                     # Draw a solid circle at the center of the square
                     cv2.circle(img, center_pt, 8, color, -1)
                     
-                    # Optional: Overlay text showing the chess notation (e.g., "e4")
-                    label = f"{square.name},{fill:.3f}"
+                    # Overlay name, occupancy fill, and image-subtraction diff
+                    # (diff vs the last confirmed board state -> spikes on captures)
+                    diff = square.difference(board_vision.getLightingOffset())
+                    label = f"{square.name} f{fill:.2f} d{diff:.0f}"
                     cv2.putText(img, label, (center_x - 10, center_y + 20), 
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
 
     return img
+
+
+# Display per-square image-subtraction diff for whole board.
+# Each cell shows current square (piece side by side with the reference is summarised by the diff map underneath) and diff heatmap, titled with scalar score
+def displayDifferences(vision, threshold=None):
+    v_offset = vision.getLightingOffset()
+
+    # Collect diff maps + scores so heatmaps can share one colour scale
+    diff_maps = [[None] * 8 for _ in range(8)]
+    scores = [[0.0] * 8 for _ in range(8)]
+    vmax = 1.0
+    for i in range(8):
+        for j in range(8):
+            square = vision.squares[i][j]
+            if square is None:
+                continue
+            dmap = square.differenceMap(v_offset)
+            diff_maps[i][j] = dmap
+            if dmap is not None:
+                scores[i][j] = float(np.mean(dmap))
+                vmax = max(vmax, float(dmap.max()))
+
+    fig, axes = plt.subplots(8, 8, figsize=(6, 6))
+    fig.suptitle(f"Per-square HSV diff vs reference (offset={v_offset:.1f})", fontsize=11)
+
+    for i in range(8):
+        for j in range(8):
+            ax = axes[i, j]
+            ax.axis('off')
+            square = vision.squares[i][j]
+            dmap = diff_maps[i][j]
+            if square is None or dmap is None:
+                continue
+
+            ax.imshow(dmap, cmap='inferno', vmin=0, vmax=vmax)
+
+            score = scores[i][j]
+            over = threshold is not None and score >= threshold
+            ax.set_title(f"{square.name} {score:.0f}", fontsize=8,
+                         color=('red' if over else 'black'))
+
+    plt.tight_layout()
+    plt.show()
 
 
 # Display each square on matplotlib

@@ -209,6 +209,29 @@ def checkOccupancy(square, profile, name, FILL_THRESH = 0.3):
 
     return fill_ratio > adaptive_fill_thresh
 
+# Per-pixel HSV difference between two HSV squares (same size), returned as a
+# single-channel magnitude map. Used for image subtraction (e.g. confirming a
+# capture, which occupancy alone can't see: opponent piece -> mover's piece).
+#   - Hue is treated circularly (OpenCV hue is 0-179 and wraps) and weighted by
+#     saturation, so low-saturation pixels (white/black pieces, where hue is just
+#     noise) don't dominate the score.
+#   - Value gets the lighting offset subtracted so exposure drift between the
+#     reference frame and now doesn't register as change.
+def hsvDifferenceMap(cur_hsv, ref_hsv, v_offset=0.0):
+    cur = cur_hsv.astype(np.float32)
+    ref = ref_hsv.astype(np.float32)
+
+    dh = np.abs(cur[:, :, 0] - ref[:, :, 0])
+    dh = np.minimum(dh, 180.0 - dh)              # hue wraps at 180
+    ds = np.abs(cur[:, :, 1] - ref[:, :, 1])
+    dv = np.abs((cur[:, :, 2] - v_offset) - ref[:, :, 2])
+
+    # Weight hue by how saturated the pixels are (avg of the two frames, 0-1),
+    # since hue is meaningless when saturation is low
+    sat_weight = np.minimum(cur[:, :, 1], ref[:, :, 1]) / 255.0
+
+    return dh * sat_weight + ds + dv
+
 def detectContourArea(z, square, show=False):
     mask = (z > 3.25).astype(np.uint8) * 255
     kernel = np.ones((5,5), np.uint8)

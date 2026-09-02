@@ -18,8 +18,8 @@ class BoardVision:
         self.M = None
         self.warped_img = None
         self.bot_is_white = None
-        self.white_piece_ref = None  # Reference brightness for a white piece
-        self.black_piece_ref = None  # Reference brightness for a black piece
+        self.square_lookup = {}  # square name ("e4") -> ChessSquare
+        self.reference_hsv = None  # board brightness when the reference images were snapshotted
 
     def _getSquareImage(self, img, row, col):
         top_left = self.coord[row, col] # top left coordinate of square
@@ -57,6 +57,7 @@ class BoardVision:
                 # Store chess square object
                 square_object = ChessSquare(hsv_img[row][col], row, col, file, rank)
                 self.squares[row][col] = square_object
+                self.square_lookup[square_object.name] = square_object
 
                 # Calculate average hsv values
                 square_means.append(np.mean(hsv_img[row][col], axis=(0, 1)))
@@ -88,20 +89,31 @@ class BoardVision:
             'curr_hsv': np.median(square_means)
         }
 
-        # Reference brightness for piece-colour classification
-        if self.bot_is_white:
-            self.white_piece_ref, self.black_piece_ref = robot_square_hsv, opponent_square_hsv
-        else:
-            self.white_piece_ref, self.black_piece_ref = opponent_square_hsv, robot_square_hsv
+        # The reference images (set in each ChessSquare) correspond to this frame's lighting
+        self.reference_hsv = np.median(square_means)
 
-    # Classify piece colour on an occupied square by brightness, against white/black references learned at calibration
-    # Same lighting offset used for occupancy is applied so fixed references stay valid as light drifts
-    def classifyColour(self, hsv_img):
-        offset = self.light_profile['curr_hsv'] - self.light_profile['avg_hsv']
-        brightness = np.mean(hsv_img) - offset
-        if abs(brightness - self.white_piece_ref) <= abs(brightness - self.black_piece_ref):
-            return "White"
-        return "Black"
+    # Freeze current square images as reference for future image subtraction
+    # Call once board is at a known-good state (after each confirmed move)
+    def snapshotReference(self):
+        for row in self.squares:
+            for square in row:
+                if square is not None:
+                    square.snapshotReference()
+        # Reference images now correspond to the current lighting
+        self.reference_hsv = self.light_profile['curr_hsv']
+
+    # Exposure drift between when the reference was taken and the current frame.
+    # Subtracted from the reference's Value channel so lighting change isn't read as motion.
+    def getLightingOffset(self):
+        if self.reference_hsv is None or self.light_profile is None:
+            return 0.0
+        return float(self.light_profile['curr_hsv'] - self.reference_hsv)
+
+    # HSV difference on a named square vs its reference image (exposure-compensated).
+    # Used to confirm a capture, which leaves occupancy unchanged at the destination.
+    def squareDifference(self, name):
+        square = self.square_lookup.get(name)
+        return square.difference(self.getLightingOffset()) if square is not None else 0.0
 
     # Warps a raw frame (same pipeline as updateFrame) and builds the light/dark reference profiles from it. Use this to calibrate from a live/populated frame.
     def calibrate(self, raw_img, M):
@@ -134,12 +146,6 @@ class BoardVision:
         for square, square_img in square_data:
             profile = self.light_profile if square.is_light_square else self.dark_profile
             square.updateOccupancy(square_img, profile)
-
-            # Observed piece colour
-            if square.getOccupancy():
-                square.setObservedSide(self.classifyColour(square_img))
-            else:
-                square.setObservedSide(None)
 
     # Retrieves current frame occupancy, appends to history, returns mode of occupancy every 10 frames
     # Otherwise, returns None

@@ -1,9 +1,9 @@
-import serial
 import chess, chess.engine
 from enum import Enum, auto
 from src.vision.board_vision import BoardVision
 from src.ui.visualize import ChessVisualizer
 from src.hardware.robot import RobotController
+import src.ui.debugger as debugger
 
 #  (\(\
 # ( -.-)
@@ -20,6 +20,8 @@ class GameState(Enum):
     WAITING_FOR_MOVE = auto()
 
 class ChessBoard:
+    CAPTURE_DIFF_THRESHOLD = 15.0 # Minimum mean-abs H/S difference for destination square to count as captured
+
     def __init__(self, coord, M, warped_img=None):
         # Initialize components
         self.vision = BoardVision(coord)
@@ -53,6 +55,7 @@ class ChessBoard:
 
     # FSM state updater
     def update(self, img):
+        debugger.displayDifferences(self.vision)
         if img is not None:
             self.vision.updateFrame(img)
         
@@ -86,6 +89,9 @@ class ChessBoard:
             # Push the move after animation
             self.board.push(self.pending_push_move)
             self.pending_push_move = None
+
+            # Reset image-subtraction baseline to new stable board state
+            self.vision.snapshotReference()
 
             # Go to next FSM state
             if self.board.is_game_over():
@@ -226,11 +232,14 @@ class ChessBoard:
                                                 chess.square_rank(move.from_square))
                 move_squares.add(move.to_square)
                 move_squares.add(captured_square)
-            # normal capture: 
-            # destination was already occupied and stays occupie
-            # its occupancy does not change. do not expect it in change
+            # normal capture:
+            # destination was already occupied and stays occupied
+            # occupancy does not change, so confirm it via image subtraction:
+            # destination pixels change (opponent piece -> mover's piece)
             elif self.board.is_capture(move):
-                pass
+                dest_name = chess.square_name(move.to_square)
+                if self.vision.squareDifference(dest_name) < self.CAPTURE_DIFF_THRESHOLD:
+                    continue  # destination looks unchanged -> not this capture
             # regular move: 
             # destination goes from empty to occupied
             else:
@@ -282,20 +291,6 @@ class ChessBoard:
                     occ[row][col] = True
 
         return occ
-
-    # Retrieve expected piece colours from chess engine (source of truth)
-    def getEngineSides(self):
-        sides = [[None for _ in range(8)] for _ in range(8)]
-
-        for visual_row in self.vision.squares:
-            for square_obj in visual_row:
-                row, col = square_obj.coord
-                piece = self.board.piece_at(chess.parse_square(square_obj.name))
-
-                if piece is not None:
-                    sides[row][col] = "White" if piece.color == chess.WHITE else "Black"
-
-        return sides
 
     # Detect changes
     def getChangedSquares(self, stabilized_observed):
