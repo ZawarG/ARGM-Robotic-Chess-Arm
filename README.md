@@ -2,7 +2,7 @@
 
 ## Overview
 An autonomous chess-playing robot that combines computer vision, state estimation, and robotic manipulation to detect human moves, interface with the Stockfish chess engine, and execute physical responses using a custom robotic arm.
-> **Current Status:** The system is successfully detects board state, tracks physical moves, and visualizes gameplay in real time.
+> **Current Status:** The system successfully detects board state, tracks physical moves, and visualizes gameplay in real time. Robotic-arm execution (Python ↔ Arduino) is the next milestone.
 
 ## How It Works
 1. **Feed Capture:** A camera captures the chessboard in its initial state
@@ -34,7 +34,7 @@ The pipeline extracts the chessboard from the camera feed, applies a perspective
 
 *A manual calibration fallback is used when automatic detection fails and for testing under controlled conditions.*
 
-After calibration, the board is split into an 64 individual squares. Each square is classified as occupied or empty using a learned empty-square profile.
+After calibration, the board is split into 64 individual squares. Each square is classified as occupied or empty using a learned empty-square profile.
 Square cropping is intentionally tight to improve per-square classification consistency.
 
 ### Digital Visualizer
@@ -73,9 +73,12 @@ Game Loop (FSM)
 ```
 
 ## Features & Capabilities
-- **Automated Setup:** Automatic chessboard localization and segmentation.- **State Tracking:** Real-time board-state tracking via occupancy and color analysis.
-- **Engine Integration:** Full integration with the Stockfish chess engine.- **Live UI:** Interactive digital visualizer for debugging and game mirroring.
+- **Automated Setup:** Automatic chessboard localization and segmentation.
+- **State Tracking:** Real-time board-state tracking via occupancy and color analysis.
+- **Engine Integration:** Full integration with the Stockfish chess engine.
+- **Live UI:** Interactive digital visualizer for debugging and game mirroring.
 - **Robust Logic:** Centralized Finite State Machine (FSM) for system coordination.
+- **Dual Run Modes:** A recorded-video mode tracks both players visually for testing, while live-camera mode has Stockfish drive the opponent's turn.
 
 ## Current Progress
 - [x] Camera calibration
@@ -94,11 +97,6 @@ Game Loop (FSM)
 - **Shadow Mitigation:** Eliminating false positive occupancy flags caused by shadows cast by pieces onto adjacent squares.
 - **Move Tracking:** Tracking moves captures and promotions using the occupancy-first approach.
 - **Physical Syncing:** Eliminating the mandatory empty-board calibration step to allow system initialization mid-game.
-- Chess board detection and occupancy classification without an empty-board calibration stage
-- Reliable chess board and state detection under varying lighting conditions and camera angles
-- Distinguishing valid moves from temporary occlusions
-- Handling one-off squares, which typically get flagged due to shadows, reflections, or wood grain
-- Synchronizing physical and digital game states
 
 ## Future Work
 - Eliminate the empty-board calibration requirement

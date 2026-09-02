@@ -23,12 +23,13 @@ def main():
         ret, img = cam.read()
         if not ret: continue
 
-        board_detected, board_coord, warped_img = runCalibration(img, model)
+        board_detected, board_coord, warped_img, M = runCalibration(img, model)
 
     # Game phase
-    game = ChessBoard(board_coord, player_is_black)
-    game.vision.initializeBoard(warped_img)
-    
+    # Live play: robot_enabled defaults to True, so engine/arm plays opponent
+    # Passing warped_img calibrates occupancy up front (initializeBoard runs in __init__).
+    game = ChessBoard(board_coord, M, warped_img)
+
     while True:
         ret, img = cam.read()
         if not ret: break
@@ -90,7 +91,9 @@ def testCode(model):
 
     # Build the game, but don't calibrate occupancy yet
     # The light/dark reference profiles need the populated board, which the user sets up next
-    game = ChessBoard(board_coord, M)
+    # robot_enabled=False
+    # This is the recorded-video test path, so both sides are tracked visually instead of the engine/arm playing the opponent
+    game = ChessBoard(board_coord, M, robot_enabled=False)
 
     paused = False
 

@@ -31,10 +31,17 @@ class ChessBoard:
         'n': chess.KNIGHT,
     }
 
-    def __init__(self, coord, M, warped_img=None):
+    def __init__(self, coord, M, warped_img=None, robot_enabled=True):
         # Initialize components
         self.vision = BoardVision(coord)
         self.M = M
+
+        # robot_enabled=True  -> live play: the engine picks the opponent's move and
+        #                        the arm physically makes it (ROBOT_MOVING).
+        # robot_enabled=False -> testing on a recorded video: both sides are just
+        #                        tracked visually, so the "robot" side is detected as a
+        #                        human move instead of being generated (HUMAN_MOVING).
+        self.robot_enabled = robot_enabled
 
         # Occupancy profiles only make sense once the pieces are on the board.
         # If a warped frame is supplied up front, calibrate now (single-image test path). 
@@ -46,13 +53,15 @@ class ChessBoard:
 
         self.board = chess.Board()
         self.engine = chess.engine.SimpleEngine.popen_uci("/opt/homebrew/bin/stockfish")
-        # self.robot = RobotController()
+        self.robot = RobotController() if robot_enabled else None
         self.visualizer = ChessVisualizer(self.board)
 
         # State management
+        # bot_is_white is unknown until beginGame() calibrates
+        # Start in the setup state
+        # __handleWaitingForStart picks first turn once we know the colours
         self.bot_is_white = None
-        # self.state = GameState.ROBOT_MOVING if self.bot_is_white else GameState.HUMAN_MOVING
-        self.state = GameState.WAITING_FOR_MOVE
+        self.state = GameState.WAITING_FOR_START
         self.pending_push_move = None
         self.last_move_by_human = False
 
@@ -84,8 +93,6 @@ class ChessBoard:
             self.__handleWaitingForStart()
 
         # Standard game loop
-        if self.state == GameState.WAITING_FOR_MOVE:
-            self.__handleTrackBoard()
         if self.state == GameState.HUMAN_MOVING:
             self.__handleHumanMoving()
         elif self.state == GameState.ROBOT_MOVING:
@@ -110,39 +117,13 @@ class ChessBoard:
             # Go to next FSM state
             if self.board.is_game_over():
                 self.state = GameState.GAME_OVER
+            elif not self.robot_enabled:
+                # Testing on video: both sides are tracked visually, so every turn
+                # is a "human" move regardless of who just played.
+                self.state = GameState.HUMAN_MOVING
             else:
-                self.state = GameState.WAITING_FOR_MOVE
-                # switch between human and robot
-                # self.state = GameState.ROBOT_MOVING if self.last_move_by_human else GameState.HUMAN_MOVING
-
-    def __handleTrackBoard(self):
-        stabilized_observed = self.vision.getStabilizedOccupancy()
-
-        if stabilized_observed is None:
-            return
-
-        changed = self.getChangedSquares(stabilized_observed)
-        if not changed:
-            return
-
-        move = self.detectMove(changed)
-        print(move)
-
-        # detectMove found a promotion but can't tell which piece -> ask the human
-        if self.promotion_candidates:
-            self.promotion_selection = 'q'
-            self.state = GameState.PENDING_PROMOTION
-            return
-
-        if move:
-            # Determine who made the move based on the engine's current turn
-            current_turn = "White" if self.board.turn == chess.WHITE else "Black"
-            print(f"Detected move ({current_turn}): {move}")
-
-            self.__commitMove(move)
-        else:
-            # Mid-move or noise, stay tracking
-            self.state = GameState.WAITING_FOR_MOVE
+                # Live play: the human just moved -> robot's turn, and vice versa.
+                self.state = GameState.ROBOT_MOVING if self.last_move_by_human else GameState.HUMAN_MOVING
 
     def __handleWaitingForStart(self):
         stabilized_observed = self.vision.getStabilizedOccupancy()
@@ -155,11 +136,12 @@ class ChessBoard:
         changed = self.getChangedSquares(stabilized_observed)
 
         if not changed:
-            # Transition to the first turn
-            if self.bot_is_white:
+            # Transition to the first turn.
+            # In video-testing mode there is no robot, so always track visually.
+            if self.robot_enabled and self.bot_is_white:
                 self.state = GameState.ROBOT_MOVING
             else:
-                self.state = GameState.WAITING_FOR_MOVE
+                self.state = GameState.HUMAN_MOVING
 
     def __handleHumanMoving(self):
         stabilized_observed = self.vision.getStabilizedOccupancy()
@@ -201,7 +183,7 @@ class ChessBoard:
         move = result.move
 
         print("Robot played:", move)
-        # self.robot.movePiece(move.from_square, move.to_square)
+        self.robot.movePiece(move.from_square, move.to_square)
         
         self.last_move_by_human = False
         self.pending_push_move = move  # store the move to push after animation finishes
@@ -221,7 +203,8 @@ class ChessBoard:
         else:
             winner =  "Robot"
         
-        # arduino.write(bytes('winner: ' + winner + '\n', 'utf-8'))
+        if self.robot_enabled:
+            self.robot.announceWinner(winner)
 
         return winner
 
