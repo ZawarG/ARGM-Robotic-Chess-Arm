@@ -118,13 +118,30 @@ def testCode(model):
 
             live_display = debugger.drawOccupancyOverlay(game.vision)
 
+            # Promotion prompt: vision saw a pawn promote but can't tell into what
+            if game.isAwaitingPromotion():
+                names = {'q': 'Queen', 'r': 'Rook', 'b': 'Bishop', 'n': 'Knight'}
+                sel = game.promotion_selection
+                cv2.putText(live_display, "Promotion: [Q]ueen [R]ook [B]ishop k[N]ight",
+                            (20, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+                cv2.putText(live_display, f"Selected: {names[sel]}  -  press ENTER to confirm",
+                            (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+
         # Show live video window
         cv2.imshow("Live Chess Matrix Tracker", live_display)
 
         # Intercept keyboard keys
         key = cv2.waitKey(1) & 0xFF
 
-        if key == ord('s') and not game.started:  # 'S' calibrates + starts the game
+        # While awaiting a promotion pick, q/r/b/n select the piece and Enter confirms the choice
+        # These are gated here so 'q' means Queen, not Quit
+        if game.started and game.isAwaitingPromotion():
+            if key in (ord('q'), ord('r'), ord('b'), ord('n')):
+                game.selectPromotion(chr(key))
+            elif key in (13, 10):  # Enter (CR / LF)
+                game.confirmPromotion()
+
+        elif key == ord('s') and not game.started:  # 'S' calibrates + starts the game
             game.beginGame(img)  # uses the CURRENT frame (pieces in place)
             print("Game started")
 

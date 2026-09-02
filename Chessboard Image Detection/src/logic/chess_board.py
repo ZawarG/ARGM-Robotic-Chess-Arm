@@ -18,9 +18,18 @@ class GameState(Enum):
     ANIMATING_MOVE = auto()
     GAME_OVER = auto()
     WAITING_FOR_MOVE = auto()
+    PENDING_PROMOTION = auto() # Promotion detected; waiting for human to pick piece
 
 class ChessBoard:
     CAPTURE_DIFF_THRESHOLD = 15.0 # Minimum mean-abs H/S difference for destination square to count as captured
+
+    # Promotion piece keys -> python-chess piece types
+    PROMOTION_PIECES = {
+        'q': chess.QUEEN,
+        'r': chess.ROOK,
+        'b': chess.BISHOP,
+        'n': chess.KNIGHT,
+    }
 
     def __init__(self, coord, M, warped_img=None):
         # Initialize components
@@ -46,6 +55,11 @@ class ChessBoard:
         self.state = GameState.WAITING_FOR_MOVE
         self.pending_push_move = None
         self.last_move_by_human = False
+
+        # Promotion disambiguation
+        # Vision detects that promotion happened but not which piece, so a human keypress picks from these candidates
+        self.promotion_candidates = None   # list of the 4 legal promotion Moves (same from/to)
+        self.promotion_selection = 'q'     # currently highlighted piece; committed on Enter
 
     # Calibrate occupancy profiles from the current (populated) frame, then start play.
     # Call this once the pieces are set up, e.g. on a keypress.
@@ -114,15 +128,18 @@ class ChessBoard:
         move = self.detectMove(changed)
         print(move)
 
+        # detectMove found a promotion but can't tell which piece -> ask the human
+        if self.promotion_candidates:
+            self.promotion_selection = 'q'
+            self.state = GameState.PENDING_PROMOTION
+            return
+
         if move:
             # Determine who made the move based on the engine's current turn
             current_turn = "White" if self.board.turn == chess.WHITE else "Black"
             print(f"Detected move ({current_turn}): {move}")
-            
-            self.pending_push_move = move  
-            piece = self.board.piece_at(move.from_square)
-            self.visualizer.start_animation(piece.symbol(), move.from_square, move.to_square)
-            self.state = GameState.ANIMATING_MOVE 
+
+            self.__commitMove(move)
         else:
             # Mid-move or noise, stay tracking
             self.state = GameState.WAITING_FOR_MOVE
@@ -159,14 +176,18 @@ class ChessBoard:
         # Turn differences into a legal chess move
         move = self.detectMove(changed)
 
+        # detectMove found a promotion but can't tell which piece -> ask the human
+        if self.promotion_candidates:
+            self.last_move_by_human = True
+            self.promotion_selection = 'q'
+            self.state = GameState.PENDING_PROMOTION
+            return
+
         if move:
             print("Human played:", move)
-            
+
             self.last_move_by_human = True
-            self.pending_push_move = move  # store the move to push after animation finishes
-            piece = self.board.piece_at(move.from_square)
-            self.visualizer.start_animation(piece.symbol(), move.from_square, move.to_square)
-            self.state = GameState.ANIMATING_MOVE 
+            self.__commitMove(move)
 
         else:
             # still mid move or noise
@@ -200,9 +221,35 @@ class ChessBoard:
         else:
             winner =  "Robot"
         
-        # arduino.write(bytes('winner: ' + winner + '\n', 'utf-8')) 
+        # arduino.write(bytes('winner: ' + winner + '\n', 'utf-8'))
 
         return winner
+
+    # Queue a move for animation, then push once the animation finishes
+    def __commitMove(self, move):
+        self.pending_push_move = move
+        piece = self.board.piece_at(move.from_square)
+        self.visualizer.start_animation(piece.symbol(), move.from_square, move.to_square)
+        self.state = GameState.ANIMATING_MOVE
+
+    # True while a detected promotion is waiting for human to pick a piece
+    def isAwaitingPromotion(self):
+        return self.state == GameState.PENDING_PROMOTION
+
+    # Highlight a promotion piece ('q'/'r'/'b'/'n') without committing it yet
+    def selectPromotion(self, char):
+        if char in self.PROMOTION_PIECES:
+            self.promotion_selection = char
+
+    # Commit the highlighted promotion: pick the matching candidate and animate it
+    def confirmPromotion(self):
+        if not self.promotion_candidates:
+            return
+        piece_type = self.PROMOTION_PIECES[self.promotion_selection]
+        move = next((m for m in self.promotion_candidates if m.promotion == piece_type), None)
+        self.promotion_candidates = None
+        if move is not None:
+            self.__commitMove(move)
 
     # Changed squares -> legal chess move
     def detectMove(self, changed):
@@ -264,17 +311,27 @@ class ChessBoard:
         
         print('possible moves', possible_moves)
 
-        if possible_moves:
-            for move in possible_moves:
-                if move.promotion == chess.QUEEN: # if pawn promotion, default to queen
-                    move_to_play = move
-                    break
-            else:
-                move_to_play = possible_moves[0] # otherwise, pick first legal match
+        if not possible_moves:
+            return None
 
-            return move_to_play
-        
-        return None
+        # Pawn promotion produces four legal moves sharing one from/to (=Q/=R/=B/=N)
+        # Vision can't tell which piece it became
+        # Defer to a human keypress instead of committing anything now
+        if self.__isPromotionGroup(possible_moves):
+            self.promotion_candidates = possible_moves
+            return None
+
+        return possible_moves[0] # first legal match
+
+    # True when matched moves are ambiguous
+    # 2+ moves that all promote and share the same from/to (only the promotion piece differs).
+    def __isPromotionGroup(self, moves):
+        if len(moves) < 2:
+            return False
+        if any(m.promotion is None for m in moves):
+            return False
+        first = moves[0]
+        return all(m.from_square == first.from_square and m.to_square == first.to_square for m in moves)
     
     # Retrieve occupancy from chess engine
     def getEngineOccupancy(self):

@@ -213,3 +213,6 @@ __marimo__/
 # image detection data
 /Chessboard Image Detection/data/input
 /Chessboard Image Detection/data/videos
+
+# tests
+/Chessboard Image Detection/tests/
