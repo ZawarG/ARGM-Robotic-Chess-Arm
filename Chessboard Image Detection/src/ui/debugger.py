@@ -1,7 +1,7 @@
 import cv2
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from src.vision import utils
+from src.vision import occupancy
 import numpy as np
 
 #  (\(\
@@ -9,6 +9,28 @@ import numpy as np
 # o_(")(")
 # This file displays all 64 squares of the chess board in a 8x8 grid, used for debugging
 # Each square is surrounded by either a red (occupied) or green (empty) border
+
+# Shows raw frame with four detected outer corners numbered.
+# Used during calibration to confirm board corners were found correctly
+def showOuterCorners(img, source_pts):
+    debug = img.copy()
+
+    for i, p in enumerate(source_pts.astype(int)):
+        cv2.circle(debug, tuple(p), 8, (0, 0, 255), -1)
+        cv2.putText(debug, str(i), tuple(p), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7, (255, 0, 0), 2)
+
+    cv2.imshow("Outer corners", debug)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+# Shows 7x7 inner corners found by findChessboardCorners.
+# Used during calibration to confirm chessboard grid was detected
+def showDetectedCorners(img, corners, board_detected):
+    fnl = cv2.drawChessboardCorners(img, (7, 7), corners, board_detected)
+    cv2.imshow("Chessboard with Corners", fnl)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
 # Draws a red (occupied) or green (empty) for each square on top of the warped image
 def drawOccupancyOverlay(board_vision):
@@ -49,13 +71,9 @@ def drawOccupancyOverlay(board_vision):
                     is_occupied = square.getOccupancy() 
 
                     profile = board_vision.light_profile if square.is_light_square else board_vision.dark_profile
-                    hsv_offset = profile['curr_hsv'] - profile['avg_hsv']
+                    z_euclidean = occupancy.computeFillZ(square.image, profile)
 
-                    adjusted_avg = profile['avg_sq'] + hsv_offset
-                    z_channels = (square.image.astype(np.float32) - adjusted_avg) / (profile['std_sq'] + 1)
-                    z_euclidean = np.sqrt(np.sum(np.square(z_channels), axis=2))
-
-                    fill = utils.detectContourArea(z_euclidean, None, show=False)
+                    fill = occupancy.detectContourArea(z_euclidean, None, show=False)
                     
                     # BGR Colors: Red if occupied, Green if empty
                     color = (0, 0, 255) if is_occupied else (0, 255, 0)
@@ -145,10 +163,8 @@ def displaySquares(vision):
             occupied = square.getOccupancy()
             color = 'red' if occupied else 'green'
 
-            brightness_offset = profile['curr_hsv'] - profile['avg_hsv']
-
-            z = np.abs(img.astype(np.float32) - profile['avg_sq'] - brightness_offset) / (profile['std_sq'] + 1) 
-            fill = utils.detectContourArea(z, None, show=False)
+            z = occupancy.computeFillZ(img, profile)
+            fill = occupancy.detectContourArea(z, None, show=False)
 
             # 3. Visual Feedback
             rect = patches.Rectangle(

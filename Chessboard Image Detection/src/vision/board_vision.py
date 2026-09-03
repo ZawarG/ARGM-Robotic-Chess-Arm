@@ -1,5 +1,6 @@
 import numpy as np
-import src.vision.utils as utils
+import src.vision.geometry as geometry
+import src.vision.occupancy as occupancy
 from src.vision.chess_square import ChessSquare
 
 #  (\(\
@@ -29,7 +30,7 @@ class BoardVision:
             int(top_left[0]):int(bottom_right[0])
         ]
 
-        hsv = utils.adjustSquare(isolated_square)
+        hsv = occupancy.adjustSquare(isolated_square)
         return hsv
 
     def initializeBoard(self, img, M):
@@ -117,15 +118,15 @@ class BoardVision:
 
     # Warps a raw frame (same pipeline as updateFrame) and builds the light/dark reference profiles from it. Use this to calibrate from a live/populated frame.
     def calibrate(self, raw_img, M):
-        img_small = utils.makeImageSmall(raw_img)
-        warped = utils.warpFrame(img_small, M)
+        img_small = geometry.makeImageSmall(raw_img)
+        warped = geometry.warpFrame(img_small, M)
         self.initializeBoard(warped, M)
         return self.bot_is_white
 
     # Takes a raw unwarped video frame, crops and warps it, and extracts the squares
     def updateFrame(self, raw_img):
-        img_small = utils.makeImageSmall(raw_img)
-        img = utils.warpFrame(img_small, self.M)
+        img_small = geometry.makeImageSmall(raw_img)
+        img = geometry.warpFrame(img_small, self.M)
         self.warped_img = img
 
         square_means = []

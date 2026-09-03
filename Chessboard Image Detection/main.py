@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 from src.logic.chess_board import ChessBoard
-import src.vision.utils as utils
+import src.vision.geometry as geometry
 import src.ui.calibration as calibration
 import src.ui.debugger as debugger
 
@@ -47,12 +47,12 @@ def main():
     cam.release()
 
 def runCalibration(img, model):
-    img_small = utils.makeImageSmall(img) # Reduce size of image
-    img_cropped, (offset_x, offset_y) = utils.cropImageToBoard(img_small, model) # Detect/crop to board using YOLO
+    img_small = geometry.makeImageSmall(img) # Reduce size of image
+    img_cropped, (offset_x, offset_y) = geometry.cropImageToBoard(img_small, model) # Detect/crop to board using YOLO
 
     # Attempt automatic detection and extract corners
-    img_mask = utils.preprocessImage(img_cropped)
-    board_detected, corners = utils.detectSquares(img_mask)
+    img_mask = geometry.preprocessImage(img_cropped)
+    board_detected, corners = geometry.detectSquares(img_mask)
 
     # Map corners from the tight YOLO crop back into full img_small space.
     # extractOuterCorners can land outside the tight crop
@@ -65,7 +65,7 @@ def runCalibration(img, model):
         print("Automatic detection failed. Opening manual calibration.")
         board_detected, corners = calibration.adjustImageManually(img_small)
 
-    M, coords, warped_img = utils.runInitialCalibration(img_small, corners)
+    M, coords, warped_img = geometry.runInitialCalibration(img_small, corners)
 
     return board_detected, coords, warped_img, M
 
@@ -108,7 +108,7 @@ def testCode(model):
             # Setup phase: 
             # Show the live warped feed so the user can place the pieces
             # Press 'S' to calibrate from this frame and start.
-            warped = utils.warpFrame(utils.makeImageSmall(img), M)
+            warped = geometry.warpFrame(geometry.makeImageSmall(img), M)
             live_display = warped.copy()
             cv2.putText(live_display, "Set up pieces, then press S to start",
                         (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)

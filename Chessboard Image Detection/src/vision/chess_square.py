@@ -1,5 +1,5 @@
 import numpy as np
-import src.vision.utils as utils
+import src.vision.occupancy as occupancy
 
 #  (\(\
 # ( -.-)
@@ -32,7 +32,7 @@ class ChessSquare: # responsibile for vision aspect
 
     def updateOccupancy(self, image, profile):
         self.image = image
-        self.occupancy = utils.checkOccupancy(self.image, profile, self.name)
+        self.occupancy = occupancy.checkOccupancy(self.image, profile, self.name)
 
     def getOccupancy(self):
         return self.occupancy
@@ -49,7 +49,7 @@ class ChessSquare: # responsibile for vision aspect
             return None
         if self.reference_image.shape != self.image.shape:
             return None
-        return utils.hsvDifferenceMap(self.image, self.reference_image, v_offset)
+        return occupancy.hsvDifferenceMap(self.image, self.reference_image, v_offset)
 
     # Scalar diff score: mean of the per-pixel HSV difference map.
     def difference(self, v_offset=0.0):
