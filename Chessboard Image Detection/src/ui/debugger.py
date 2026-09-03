@@ -2,6 +2,7 @@ import cv2
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from src.vision import occupancy
+from src.vision import geometry
 import numpy as np
 
 #  (\(\
@@ -31,6 +32,26 @@ def showDetectedCorners(img, corners, board_detected):
     cv2.imshow("Chessboard with Corners", fnl)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
+
+# Setup-phase overlay: warps the raw frame and prompts the user to place pieces.
+# Shown until the game starts so pieces can be positioned on the live feed.
+def drawSetupOverlay(img, M):
+    warped = geometry.warpFrame(geometry.makeImageSmall(img), M)
+    live_display = warped.copy()
+    cv2.putText(live_display, "Set up pieces, then press S to start",
+                (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+    return live_display
+
+# Promotion prompt drawn on top of the occupancy overlay: vision saw a pawn
+# promote but can't tell into what, so the user picks the piece.
+def drawPromotionOverlay(live_display, game):
+    names = {'q': 'Queen', 'r': 'Rook', 'b': 'Bishop', 'n': 'Knight'}
+    sel = game.promotion_selection
+    cv2.putText(live_display, "Promotion: [Q]ueen [R]ook [B]ishop k[N]ight",
+                (20, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+    cv2.putText(live_display, f"Selected: {names[sel]}  -  press ENTER to confirm",
+                (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+    return live_display
 
 # Draws a red (occupied) or green (empty) for each square on top of the warped image
 def drawOccupancyOverlay(board_vision):

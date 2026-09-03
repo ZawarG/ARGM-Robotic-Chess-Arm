@@ -105,13 +105,9 @@ def testCode(model):
                 break
 
         if not game.started:
-            # Setup phase: 
-            # Show the live warped feed so the user can place the pieces
-            # Press 'S' to calibrate from this frame and start.
-            warped = geometry.warpFrame(geometry.makeImageSmall(img), M)
-            live_display = warped.copy()
-            cv2.putText(live_display, "Set up pieces, then press S to start",
-                        (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            # Setup phase: show the live warped feed so the user can place the
+            # pieces. Press 'S' to calibrate from this frame and start.
+            live_display = debugger.drawSetupOverlay(img, M)
         else:
             # Game phase: update engine, then draw the occupancy overlay
             if not paused:
@@ -123,44 +119,47 @@ def testCode(model):
 
             # Promotion prompt: vision saw a pawn promote but can't tell into what
             if game.isAwaitingPromotion():
-                names = {'q': 'Queen', 'r': 'Rook', 'b': 'Bishop', 'n': 'Knight'}
-                sel = game.promotion_selection
-                cv2.putText(live_display, "Promotion: [Q]ueen [R]ook [B]ishop k[N]ight",
-                            (20, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-                cv2.putText(live_display, f"Selected: {names[sel]}  -  press ENTER to confirm",
-                            (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                live_display = debugger.drawPromotionOverlay(live_display, game)
 
         # Show live video window
         cv2.imshow("Live Chess Matrix Tracker", live_display)
 
         # Intercept keyboard keys
         key = cv2.waitKey(1) & 0xFF
-
-        # While awaiting a promotion pick, q/r/b/n select the piece and Enter confirms the choice
-        # These are gated here so 'q' means Queen, not Quit
-        if game.started and game.isAwaitingPromotion():
-            if key in (ord('q'), ord('r'), ord('b'), ord('n')):
-                game.selectPromotion(chr(key))
-            elif key in (13, 10):  # Enter (CR / LF)
-                game.confirmPromotion()
-
-        elif key == ord('s') and not game.started:  # 'S' calibrates + starts the game
-            game.beginGame(img)  # uses the CURRENT frame (pieces in place)
-            print("Game started")
-
-        elif key == ord(' '):  # SPACEBAR toggles pause/play
-            paused = not paused
-            print("Status:", "PAUSED" if paused else "PLAYING")
-
-        elif key == ord('d') and game.started:  # 'D' pops the per-square diff heatmap
-            debugger.displayDifferences(game.vision, ChessBoard.CAPTURE_DIFF_THRESHOLD)
-
-        elif key == ord('q'):  # 'Q' quits the stream
+        paused, quit_requested = handleKeyInput(key, game, img, paused)
+        if quit_requested:
             break
 
     game.close()
     cap.release()
     cv2.destroyAllWindows()
+
+# Handles a single keypress for the testCode loop.
+# Returns the (possibly updated) paused flag and whether the user asked to quit.
+def handleKeyInput(key, game, img, paused):
+    # While awaiting a promotion pick, q/r/b/n select the piece and Enter confirms
+    # the choice. These are gated here so 'q' means Queen, not Quit.
+    if game.started and game.isAwaitingPromotion():
+        if key in (ord('q'), ord('r'), ord('b'), ord('n')):
+            game.selectPromotion(chr(key))
+        elif key in (13, 10):  # Enter (CR / LF)
+            game.confirmPromotion()
+
+    elif key == ord('s') and not game.started:  # 'S' calibrates + starts the game
+        game.beginGame(img)  # uses the CURRENT frame (pieces in place)
+        print("Game started")
+
+    elif key == ord(' '):  # SPACEBAR toggles pause/play
+        paused = not paused
+        print("Status:", "PAUSED" if paused else "PLAYING")
+
+    elif key == ord('d') and game.started:  # 'D' pops the per-square diff heatmap
+        debugger.displayDifferences(game.vision, ChessBoard.CAPTURE_DIFF_THRESHOLD)
+
+    elif key == ord('q'):  # 'Q' quits the stream
+        return paused, True
+
+    return paused, False
 
 if __name__ == "__main__":
     USE_CAMERA = 0
