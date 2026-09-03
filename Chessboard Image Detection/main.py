@@ -4,7 +4,7 @@ from ultralytics import YOLO
 from src.logic.chess_board import ChessBoard
 import src.vision.geometry as geometry
 import src.ui.calibration as calibration
-import src.ui.debugger as debugger
+import src.ui.controls as controls
 
 #  (\(\
 # ( -.-)
@@ -15,8 +15,6 @@ def main():
     model = YOLO("Chessboard Image Detection/models/best.pt")
     cam = cv2.VideoCapture(0)
 
-    player_is_black = calibration.askPlayerColour()
-
     # Localization phase
     board_detected = False
     while not board_detected:
@@ -26,25 +24,18 @@ def main():
         board_detected, board_coord, warped_img, M = runCalibration(img, model)
 
     # Game phase
-    # Live play: robot_enabled defaults to True, so engine/arm plays opponent
-    # Passing warped_img calibrates occupancy up front (initializeBoard runs in __init__).
-    game = ChessBoard(board_coord, M, warped_img)
+    # Live play: robot_enabled defaults to True, so engine/arm plays opponent.
+    # Don't pass warped_img: occupancy is calibrated on the populated board when
+    # the user presses 'S' (beginGame), matching the setup flow in testCode.
+    game = ChessBoard(board_coord, M, robot_enabled=True)
 
-    while True:
-        ret, img = cam.read()
-        if not ret: break
-        
-        # Process vision and game logic
-        winner = game.update(img)
-        if winner is not None:
-            print(winner)
-            break
-        
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-    
+    # Shared interactive loop (setup 'S', pause SPACE, promotion q/r/b/n + ENTER,
+    # diff heatmap 'd', quit 'q')
+    controls.runGameLoop(cam, game, M)
+
     game.close()
     cam.release()
+    cv2.destroyAllWindows()
 
 def runCalibration(img, model):
     img_small = geometry.makeImageSmall(img) # Reduce size of image
@@ -54,9 +45,9 @@ def runCalibration(img, model):
     img_mask = geometry.preprocessImage(img_cropped)
     board_detected, corners = geometry.detectSquares(img_mask)
 
-    # Map corners from the tight YOLO crop back into full img_small space.
+    # Map corners from the tight YOLO crop back into full img_small space
     # extractOuterCorners can land outside the tight crop
-    # Warping img_small with an offset ensures that perspective transform doesn't sample out-of-bounds regions.
+    # Warping img_small with an offset ensures that perspective transform doesn't sample out-of-bounds regions
     if board_detected:
         corners = corners + np.array([offset_x, offset_y], dtype=corners.dtype)
 
@@ -73,10 +64,6 @@ def testCode(model):
     video_path = "Chessboard Image Detection/data/videos/starts_occupied.mov"
     cap = cv2.VideoCapture(video_path)
 
-    # Start video at this timestamp
-    START_TIME_SECONDS = 30
-    cap.set(cv2.CAP_PROP_POS_MSEC, START_TIME_SECONDS * 1000)
-
     # Grab the first frame for board localization
     ret, img = cap.read()
     if not ret:
@@ -89,77 +76,17 @@ def testCode(model):
     if board_detected is None:
         return
 
-    # Build the game, but don't calibrate occupancy yet
-    # The light/dark reference profiles need the populated board, which the user sets up next
-    # robot_enabled=False
-    # This is the recorded-video test path, so both sides are tracked visually instead of the engine/arm playing the opponent
+    # Build game but don't calibrate occupancy yet
+    # Light/dark reference profiles need populated board, which user sets up next
+    # robot_enabled=False —recorded-video test path, both sides are tracked visually instead of engine/arm playing opponent
     game = ChessBoard(board_coord, M, robot_enabled=False)
 
-    paused = False
-
-    while True:
-        # If not paused, capture a new frame
-        if not paused:
-            ret, img = cap.read()
-            if not ret:
-                break
-
-        if not game.started:
-            # Setup phase: show the live warped feed so the user can place the
-            # pieces. Press 'S' to calibrate from this frame and start.
-            live_display = debugger.drawSetupOverlay(img, M)
-        else:
-            # Game phase: update engine, then draw the occupancy overlay
-            if not paused:
-                winner = game.update(img)
-                if winner is not None:
-                    print("game over")
-
-            live_display = debugger.drawOccupancyOverlay(game.vision)
-
-            # Promotion prompt: vision saw a pawn promote but can't tell into what
-            if game.isAwaitingPromotion():
-                live_display = debugger.drawPromotionOverlay(live_display, game)
-
-        # Show live video window
-        cv2.imshow("Live Chess Matrix Tracker", live_display)
-
-        # Intercept keyboard keys
-        key = cv2.waitKey(1) & 0xFF
-        paused, quit_requested = handleKeyInput(key, game, img, paused)
-        if quit_requested:
-            break
+    # Shared interactive loop (setup 'S', pause SPACE, promotion q/r/b/n + ENTER, diff heatmap 'd', quit 'q')
+    controls.runGameLoop(cap, game, M)
 
     game.close()
     cap.release()
     cv2.destroyAllWindows()
-
-# Handles a single keypress for the testCode loop.
-# Returns the (possibly updated) paused flag and whether the user asked to quit.
-def handleKeyInput(key, game, img, paused):
-    # While awaiting a promotion pick, q/r/b/n select the piece and Enter confirms
-    # the choice. These are gated here so 'q' means Queen, not Quit.
-    if game.started and game.isAwaitingPromotion():
-        if key in (ord('q'), ord('r'), ord('b'), ord('n')):
-            game.selectPromotion(chr(key))
-        elif key in (13, 10):  # Enter (CR / LF)
-            game.confirmPromotion()
-
-    elif key == ord('s') and not game.started:  # 'S' calibrates + starts the game
-        game.beginGame(img)  # uses the CURRENT frame (pieces in place)
-        print("Game started")
-
-    elif key == ord(' '):  # SPACEBAR toggles pause/play
-        paused = not paused
-        print("Status:", "PAUSED" if paused else "PLAYING")
-
-    elif key == ord('d') and game.started:  # 'D' pops the per-square diff heatmap
-        debugger.displayDifferences(game.vision, ChessBoard.CAPTURE_DIFF_THRESHOLD)
-
-    elif key == ord('q'):  # 'Q' quits the stream
-        return paused, True
-
-    return paused, False
 
 if __name__ == "__main__":
     USE_CAMERA = 0
