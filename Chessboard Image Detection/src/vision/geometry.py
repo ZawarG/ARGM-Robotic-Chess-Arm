@@ -4,14 +4,15 @@ import numpy as np
 #  (\(\
 # ( -.-)
 # o_(")(")
-# This file holds stateless helper functions related to computer vision
+# This file holds stateless helper functions for board geometry:
+# perspective warping, grid generation, corner/board detection, and image prep
 
 # Board warping
 def getPerspectiveMatrix(source_pts, board_size=800):
     dest_pts = np.array([
-        [0, 0], 
-        [board_size, 0], 
-        [board_size, board_size], 
+        [0, 0],
+        [board_size, 0],
+        [board_size, board_size],
         [0, board_size]
     ], dtype="float32")
 
@@ -21,7 +22,7 @@ def generateGridCoordinates(board_size=800):
     # Generate 9x9 coordinates
     coords = np.zeros((9, 9, 2), dtype=np.float32)
     lin_space = np.linspace(0, board_size, 9)
-    
+
     for row in range(9):
         for col in range(9):
             coords[row, col] = [lin_space[col], lin_space[row]]
@@ -32,15 +33,8 @@ def warpFrame(img, M, board_size=800):
     return cv2.warpPerspective(img, M, (board_size, board_size))
 
 def runInitialCalibration(img, source_pts, board_size=800):
-    debug = img.copy()
-
-    for i, p in enumerate(source_pts.astype(int)):
-        cv2.circle(debug, tuple(p), 8, (0,0,255), -1)
-        cv2.putText(debug, str(i), tuple(p), cv2.FONT_HERSHEY_SIMPLEX,
-                    0.7, (255,0,0), 2)
-
-    cv2.imshow("Outer corners", debug)
-    cv2.waitKey(0)
+    from src.ui import debugger
+    debugger.showOuterCorners(img, source_pts)
 
     M = getPerspectiveMatrix(source_pts, board_size)
     coords = generateGridCoordinates(board_size)
@@ -63,7 +57,7 @@ def orderPoints(points):
 def extractOuterCorners(corners):
     # Reshape 1D array to 3D grid[row][col][x,y]
     grid = corners.reshape(7,7,2)
-    
+
     # Calculate average distance between each square (intervals between 7 corners = 6)
     x_dist = (grid[0,6]-grid[0,0])/6
     y_dist = (grid[6,0]-grid[0,0])/6
@@ -93,10 +87,8 @@ def detectSquares(img):
         return False, None
 
     # Display chess board
-    fnl = cv2.drawChessboardCorners(img, (7, 7), corners, board_detected)
-    cv2.imshow("Chessboard with Corners", fnl)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    from src.ui import debugger
+    debugger.showDetectedCorners(img, corners, board_detected)
 
     return board_detected, extractOuterCorners(corners)
 
@@ -118,9 +110,9 @@ def preprocessImage(img, border_high=15, testing=False):
     # Merge both thresholds
     if testing:
         res = np.ones_like(gray)*230 # gray canvas for testing/manual adjustment
-    else: 
+    else:
         res = np.ones_like(gray)*255 # white canvas for game logic
-    
+
     res[squares_msk == 255] = 0 # Add in squares mask as black
     res[border_msk == 255] = 255 # Add in border mask as white
 
@@ -163,73 +155,8 @@ def cropImageToBoard(img, model):
     return cropped, (x1, y1)
 
 def makeImageSmall(img):
-    display_height = 800 
+    display_height = 800
     scale = display_height / img.shape[0]
     display_width = int(img.shape[1] * scale)
     img_small = cv2.resize(img, (display_width, display_height))
     return img_small
-
-# Square occupancy
-def adjustSquare(img, border_ratio=0.1):
-    # Crop
-    height, width = img.shape[:2]
-    b_top_height = int(height * border_ratio)
-    b_bot_height = int(height * border_ratio * 4) # Crop bottom extra to account for how piece tops overlapping due camera angle
-    b_width = int(width * border_ratio)
-    img = img[b_top_height:height-b_bot_height, b_width:width-b_width] 
-
-    # Detect average brightness and std
-    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-
-    return hsv
-
-def checkOccupancy(square, profile, name, FILL_THRESH = 0.3):
-    # Retrieve hsv offset
-    start_frame_bright = profile['avg_hsv']
-    curr_frame_bright = profile['curr_hsv']
-    hsv_offset = curr_frame_bright - start_frame_bright # Accounts for exposure changes during game
-
-    # Retrieve profile variables, adjust hsv dynamically
-    avg_sq = profile['avg_sq'] + hsv_offset
-    std_sq = profile['std_sq']
-
-    # Calculate z-score differences per channel
-    z_channels = np.abs(square.astype(np.float32) - avg_sq) / (std_sq + 1)
-
-    # Calculate 3D Euclidean distance including all channels
-    fill_z = np.sqrt(np.sum(np.square(z_channels), axis=2))
-
-    # Detect contour area and shape
-    fill_ratio = detectContourArea(fill_z, square)
-
-    # Create threshold for fill area
-    hsv_ratio = curr_frame_bright/start_frame_bright
-    adaptive_fill_thresh = FILL_THRESH*hsv_ratio
-
-    return fill_ratio > adaptive_fill_thresh
-
-def detectContourArea(z, square, show=False):
-    mask = (z > 3.25).astype(np.uint8) * 255
-    kernel = np.ones((5,5), np.uint8)
-    mask = cv2.morphologyEx(mask,cv2.MORPH_CLOSE,kernel)
-    kernel2 = np.ones((3,3), np.uint8)
-    mask = cv2.morphologyEx(mask,cv2.MORPH_OPEN,kernel2)
-
-    fill_area = np.count_nonzero(mask)
-    fill_ratio = fill_area / mask.size
-
-    # weight = gaussian(center)
-    # weighted_fill = np.sum(mask * weight)
-
-    if show:
-        bgr_img = cv2.cvtColor(square, cv2.COLOR_HSV2BGR)
-        overlay = bgr_img.copy()
-        overlay[mask > 0] = (0, 0, 255)
-        display = cv2.addWeighted(bgr_img, 0.7, overlay, 0.3, 0)
-
-        cv2.putText(display, f"Area: {fill_area}", (5, 20), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-        cv2.imshow("Fill Area", display)
-        cv2.waitKey(0)
-
-    return fill_ratio

@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import tkinter as tk
 from tkinter import ttk
-import src.vision.utils as utils
+import src.vision.geometry as geometry
 
 #  (\(\
 # ( -.-)
@@ -86,7 +86,7 @@ def adjustImageManually(img):
 
         # Draw a polygon if we have 4 points to show the current board area
         if len(points) == 4:
-            pts_array = utils.orderPoints(np.array(points))
+            pts_array = geometry.orderPoints(np.array(points))
             cv2.polylines(canvas, [pts_array.astype(np.int32)], True, (0, 255, 255), 2)
 
         cv2.imshow(window_name, canvas)
@@ -104,7 +104,7 @@ def adjustImageManually(img):
     cv2.destroyWindow(window_name)
     
     # Sort and adjust points before returning
-    final_pts = utils.orderPoints(np.array(points)) 
+    final_pts = geometry.orderPoints(np.array(points)) 
     final_pts[:, 1] -= HEADER_H
     final_pts[:, 0] -= x_offset
 

@@ -1,7 +1,8 @@
 import cv2
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from src.vision import utils
+from src.vision import occupancy
+from src.vision import geometry
 import numpy as np
 
 #  (\(\
@@ -9,6 +10,48 @@ import numpy as np
 # o_(")(")
 # This file displays all 64 squares of the chess board in a 8x8 grid, used for debugging
 # Each square is surrounded by either a red (occupied) or green (empty) border
+
+# Shows raw frame with four detected outer corners numbered.
+# Used during calibration to confirm board corners were found correctly
+def showOuterCorners(img, source_pts):
+    debug = img.copy()
+
+    for i, p in enumerate(source_pts.astype(int)):
+        cv2.circle(debug, tuple(p), 8, (0, 0, 255), -1)
+        cv2.putText(debug, str(i), tuple(p), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7, (255, 0, 0), 2)
+
+    cv2.imshow("Outer corners", debug)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+# Shows 7x7 inner corners found by findChessboardCorners.
+# Used during calibration to confirm chessboard grid was detected
+def showDetectedCorners(img, corners, board_detected):
+    fnl = cv2.drawChessboardCorners(img, (7, 7), corners, board_detected)
+    cv2.imshow("Chessboard with Corners", fnl)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+# Setup-phase overlay: warps the raw frame and prompts the user to place pieces.
+# Shown until the game starts so pieces can be positioned on the live feed.
+def drawSetupOverlay(img, M):
+    warped = geometry.warpFrame(geometry.makeImageSmall(img), M)
+    live_display = warped.copy()
+    cv2.putText(live_display, "Set up pieces, then press S to start",
+                (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+    return live_display
+
+# Promotion prompt drawn on top of the occupancy overlay: vision saw a pawn
+# promote but can't tell into what, so the user picks the piece.
+def drawPromotionOverlay(live_display, game):
+    names = {'q': 'Queen', 'r': 'Rook', 'b': 'Bishop', 'n': 'Knight'}
+    sel = game.promotion_selection
+    cv2.putText(live_display, "Promotion: [Q]ueen [R]ook [B]ishop k[N]ight",
+                (20, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+    cv2.putText(live_display, f"Selected: {names[sel]}  -  press ENTER to confirm",
+                (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+    return live_display
 
 # Draws a red (occupied) or green (empty) for each square on top of the warped image
 def drawOccupancyOverlay(board_vision):
@@ -49,13 +92,9 @@ def drawOccupancyOverlay(board_vision):
                     is_occupied = square.getOccupancy() 
 
                     profile = board_vision.light_profile if square.is_light_square else board_vision.dark_profile
-                    hsv_offset = profile['curr_hsv'] - profile['avg_hsv']
+                    z_euclidean = occupancy.computeFillZ(square.image, profile)
 
-                    adjusted_avg = profile['avg_sq'] + hsv_offset
-                    z_channels = (square.image.astype(np.float32) - adjusted_avg) / (profile['std_sq'] + 1)
-                    z_euclidean = np.sqrt(np.sum(np.square(z_channels), axis=2))
-
-                    fill = utils.detectContourArea(z_euclidean, None, show=False)
+                    fill = occupancy.detectContourArea(z_euclidean, None, show=False)
                     
                     # BGR Colors: Red if occupied, Green if empty
                     color = (0, 0, 255) if is_occupied else (0, 255, 0)
@@ -63,12 +102,57 @@ def drawOccupancyOverlay(board_vision):
                     # Draw a solid circle at the center of the square
                     cv2.circle(img, center_pt, 8, color, -1)
                     
-                    # Optional: Overlay text showing the chess notation (e.g., "e4")
-                    label = f"{square.name},{fill:.3f}"
+                    # Overlay name, occupancy fill, and image-subtraction diff
+                    # (diff vs the last confirmed board state -> spikes on captures)
+                    diff = square.difference(board_vision.getLightingOffset())
+                    label = f"{square.name} f{fill:.2f} d{diff:.0f}"
                     cv2.putText(img, label, (center_x - 10, center_y + 20), 
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
 
     return img
+
+
+# Display per-square image-subtraction diff for whole board.
+# Each cell shows current square (piece side by side with the reference is summarised by the diff map underneath) and diff heatmap, titled with scalar score
+def displayDifferences(vision, threshold=None):
+    v_offset = vision.getLightingOffset()
+
+    # Collect diff maps + scores so heatmaps can share one colour scale
+    diff_maps = [[None] * 8 for _ in range(8)]
+    scores = [[0.0] * 8 for _ in range(8)]
+    vmax = 1.0
+    for i in range(8):
+        for j in range(8):
+            square = vision.squares[i][j]
+            if square is None:
+                continue
+            dmap = square.differenceMap(v_offset)
+            diff_maps[i][j] = dmap
+            if dmap is not None:
+                scores[i][j] = float(np.mean(dmap))
+                vmax = max(vmax, float(dmap.max()))
+
+    fig, axes = plt.subplots(8, 8, figsize=(6, 6))
+    fig.suptitle(f"Per-square HSV diff vs reference (offset={v_offset:.1f})", fontsize=11)
+
+    for i in range(8):
+        for j in range(8):
+            ax = axes[i, j]
+            ax.axis('off')
+            square = vision.squares[i][j]
+            dmap = diff_maps[i][j]
+            if square is None or dmap is None:
+                continue
+
+            ax.imshow(dmap, cmap='inferno', vmin=0, vmax=vmax)
+
+            score = scores[i][j]
+            over = threshold is not None and score >= threshold
+            ax.set_title(f"{square.name} {score:.0f}", fontsize=8,
+                         color=('red' if over else 'black'))
+
+    plt.tight_layout()
+    plt.show()
 
 
 # Display each square on matplotlib
@@ -100,10 +184,8 @@ def displaySquares(vision):
             occupied = square.getOccupancy()
             color = 'red' if occupied else 'green'
 
-            brightness_offset = profile['curr_hsv'] - profile['avg_hsv']
-
-            z = np.abs(img.astype(np.float32) - profile['avg_sq'] - brightness_offset) / (profile['std_sq'] + 1) 
-            fill = utils.detectContourArea(z, None, show=False)
+            z = occupancy.computeFillZ(img, profile)
+            fill = occupancy.detectContourArea(z, None, show=False)
 
             # 3. Visual Feedback
             rect = patches.Rectangle(

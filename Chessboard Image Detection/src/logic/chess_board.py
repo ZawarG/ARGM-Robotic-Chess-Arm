@@ -1,9 +1,9 @@
-import serial
 import chess, chess.engine
 from enum import Enum, auto
 from src.vision.board_vision import BoardVision
 from src.ui.visualize import ChessVisualizer
 from src.hardware.robot import RobotController
+import src.ui.debugger as debugger
 
 #  (\(\
 # ( -.-)
@@ -18,41 +18,67 @@ class GameState(Enum):
     ANIMATING_MOVE = auto()
     GAME_OVER = auto()
     WAITING_FOR_MOVE = auto()
+    PENDING_PROMOTION = auto() # Promotion detected; waiting for human to pick piece
 
 class ChessBoard:
-    def __init__(self, coord, bot_is_white, M, warped_img=None, is_board_empty=False):
+    CAPTURE_DIFF_THRESHOLD = 15.0 # Minimum mean-abs H/S difference for destination square to count as captured
+
+    # Promotion piece keys -> python-chess piece types
+    PROMOTION_PIECES = {
+        'q': chess.QUEEN,
+        'r': chess.ROOK,
+        'b': chess.BISHOP,
+        'n': chess.KNIGHT,
+    }
+
+    def __init__(self, coord, M, warped_img=None, robot_enabled=True):
         # Initialize components
-        self.vision = BoardVision(coord, bot_is_white)
+        self.vision = BoardVision(coord)
         self.M = M
+
+        # robot_enabled=True  -> live play: the engine picks the opponent's move and
+        #                        the arm physically makes it (ROBOT_MOVING).
+        # robot_enabled=False -> testing on a recorded video: both sides are just
+        #                        tracked visually, so the "robot" side is detected as a
+        #                        human move instead of being generated (HUMAN_MOVING).
+        self.robot_enabled = robot_enabled
 
         # Occupancy profiles only make sense once the pieces are on the board.
         # If a warped frame is supplied up front, calibrate now (single-image test path). 
         # Otherwise defer until beginGame() is called, i.e. after the user has set up the pieces and pressed the start key.
         self.started = False
         if warped_img is not None:
-            self.vision.initializeBoard(warped_img, M, is_board_empty=is_board_empty)
+            self.vision.initializeBoard(warped_img, M)
             self.started = True
 
         self.board = chess.Board()
         self.engine = chess.engine.SimpleEngine.popen_uci("/opt/homebrew/bin/stockfish")
-        # self.robot = RobotController()
+        self.robot = RobotController() if robot_enabled else None
         self.visualizer = ChessVisualizer(self.board)
 
         # State management
-        self.bot_is_white = bot_is_white
-        # self.state = GameState.ROBOT_MOVING if self.bot_is_white else GameState.HUMAN_MOVING
-        self.state = GameState.WAITING_FOR_MOVE
+        # bot_is_white is unknown until beginGame() calibrates
+        # Start in the setup state
+        # __handleWaitingForStart picks first turn once we know the colours
+        self.bot_is_white = None
+        self.state = GameState.WAITING_FOR_START
         self.pending_push_move = None
         self.last_move_by_human = False
 
+        # Promotion disambiguation
+        # Vision detects that promotion happened but not which piece, so a human keypress picks from these candidates
+        self.promotion_candidates = None   # list of the 4 legal promotion Moves (same from/to)
+        self.promotion_selection = 'q'     # currently highlighted piece; committed on Enter
+
     # Calibrate occupancy profiles from the current (populated) frame, then start play.
     # Call this once the pieces are set up, e.g. on a keypress.
-    def beginGame(self, raw_img, is_board_empty=False):
-        self.vision.calibrate(raw_img, self.M, is_board_empty=is_board_empty)
+    def beginGame(self, raw_img):
+        self.bot_is_white = self.vision.calibrate(raw_img, self.M)
         self.started = True
 
     # FSM state updater
     def update(self, img):
+        debugger.displayDifferences(self.vision)
         if img is not None:
             self.vision.updateFrame(img)
         
@@ -67,8 +93,6 @@ class ChessBoard:
             self.__handleWaitingForStart()
 
         # Standard game loop
-        if self.state == GameState.WAITING_FOR_MOVE:
-            self.__handleTrackBoard()
         if self.state == GameState.HUMAN_MOVING:
             self.__handleHumanMoving()
         elif self.state == GameState.ROBOT_MOVING:
@@ -87,39 +111,19 @@ class ChessBoard:
             self.board.push(self.pending_push_move)
             self.pending_push_move = None
 
+            # Reset image-subtraction baseline to new stable board state
+            self.vision.snapshotReference()
+
             # Go to next FSM state
             if self.board.is_game_over():
                 self.state = GameState.GAME_OVER
+            elif not self.robot_enabled:
+                # Testing on video: both sides are tracked visually, so every turn
+                # is a "human" move regardless of who just played.
+                self.state = GameState.HUMAN_MOVING
             else:
-                self.state = GameState.WAITING_FOR_MOVE
-                # switch between human and robot
-                # self.state = GameState.ROBOT_MOVING if self.last_move_by_human else GameState.HUMAN_MOVING
-
-    def __handleTrackBoard(self):
-        stabilized_observed = self.vision.getStabilizedOccupancy()
-
-        if stabilized_observed is None:
-            return
-
-        changed = self.getChangedSquares(stabilized_observed)
-        if not changed:
-            return
-
-        move = self.detectMove(changed)
-        print(move)
-
-        if move:
-            # Determine who made the move based on the engine's current turn
-            current_turn = "White" if self.board.turn == chess.WHITE else "Black"
-            print(f"Detected move ({current_turn}): {move}")
-            
-            self.pending_push_move = move  
-            piece = self.board.piece_at(move.from_square)
-            self.visualizer.start_animation(piece.symbol(), move.from_square, move.to_square)
-            self.state = GameState.ANIMATING_MOVE 
-        else:
-            # Mid-move or noise, stay tracking
-            self.state = GameState.WAITING_FOR_MOVE
+                # Live play: the human just moved -> robot's turn, and vice versa.
+                self.state = GameState.ROBOT_MOVING if self.last_move_by_human else GameState.HUMAN_MOVING
 
     def __handleWaitingForStart(self):
         stabilized_observed = self.vision.getStabilizedOccupancy()
@@ -132,11 +136,12 @@ class ChessBoard:
         changed = self.getChangedSquares(stabilized_observed)
 
         if not changed:
-            # Transition to the first turn
-            if self.bot_is_white:
+            # Transition to the first turn.
+            # In video-testing mode there is no robot, so always track visually.
+            if self.robot_enabled and self.bot_is_white:
                 self.state = GameState.ROBOT_MOVING
             else:
-                self.state = GameState.WAITING_FOR_MOVE
+                self.state = GameState.HUMAN_MOVING
 
     def __handleHumanMoving(self):
         stabilized_observed = self.vision.getStabilizedOccupancy()
@@ -153,14 +158,18 @@ class ChessBoard:
         # Turn differences into a legal chess move
         move = self.detectMove(changed)
 
+        # detectMove found a promotion but can't tell which piece -> ask the human
+        if self.promotion_candidates:
+            self.last_move_by_human = True
+            self.promotion_selection = 'q'
+            self.state = GameState.PENDING_PROMOTION
+            return
+
         if move:
             print("Human played:", move)
-            
+
             self.last_move_by_human = True
-            self.pending_push_move = move  # store the move to push after animation finishes
-            piece = self.board.piece_at(move.from_square)
-            self.visualizer.start_animation(piece.symbol(), move.from_square, move.to_square)
-            self.state = GameState.ANIMATING_MOVE 
+            self.__commitMove(move)
 
         else:
             # still mid move or noise
@@ -174,7 +183,7 @@ class ChessBoard:
         move = result.move
 
         print("Robot played:", move)
-        # self.robot.movePiece(move.from_square, move.to_square)
+        self.robot.movePiece(move.from_square, move.to_square)
         
         self.last_move_by_human = False
         self.pending_push_move = move  # store the move to push after animation finishes
@@ -194,15 +203,42 @@ class ChessBoard:
         else:
             winner =  "Robot"
         
-        # arduino.write(bytes('winner: ' + winner + '\n', 'utf-8')) 
+        if self.robot_enabled:
+            self.robot.announceWinner(winner)
 
         return winner
+
+    # Queue a move for animation, then push once the animation finishes
+    def __commitMove(self, move):
+        self.pending_push_move = move
+        piece = self.board.piece_at(move.from_square)
+        self.visualizer.start_animation(piece.symbol(), move.from_square, move.to_square)
+        self.state = GameState.ANIMATING_MOVE
+
+    # True while a detected promotion is waiting for human to pick a piece
+    def isAwaitingPromotion(self):
+        return self.state == GameState.PENDING_PROMOTION
+
+    # Highlight a promotion piece ('q'/'r'/'b'/'n') without committing it yet
+    def selectPromotion(self, char):
+        if char in self.PROMOTION_PIECES:
+            self.promotion_selection = char
+
+    # Commit the highlighted promotion: pick the matching candidate and animate it
+    def confirmPromotion(self):
+        if not self.promotion_candidates:
+            return
+        piece_type = self.PROMOTION_PIECES[self.promotion_selection]
+        move = next((m for m in self.promotion_candidates if m.promotion == piece_type), None)
+        self.promotion_candidates = None
+        if move is not None:
+            self.__commitMove(move)
 
     # Changed squares -> legal chess move
     def detectMove(self, changed):
         if len(changed) == 0: # No move
             return None
-        if len(changed)>3: # Impossible (likely a hand is covering the board)
+        if len(changed) > 4: # Impossible (likely a hand is covering the board)
             return None
         
         print([chess.square_name(s) for s in changed])
@@ -214,15 +250,33 @@ class ChessBoard:
             # Only squares whose occupancy changes should appear in changed
             # The from square always becomes empty
             # The to square could have gone from empty-occupied or occupied-occupied
-            move_squares = {move.from_square, move.to_square}
+            move_squares = {move.from_square}
 
             print(move, move_squares)
 
-            # en passent
+            # en passent: 
+            # pawn lands on an empty square (so to flips)
+            # captured pawn sits on a separate square that becomes empty
             if self.board.is_en_passant(move):
-                captured_square = chess.square(chess.square_file(move.to_square), chess.square_rank(move.from_square))
+                captured_square = chess.square(chess.square_file(move.to_square), 
+                                                chess.square_rank(move.from_square))
+                move_squares.add(move.to_square)
                 move_squares.add(captured_square)
-            # castling
+            # normal capture:
+            # destination was already occupied and stays occupied
+            # occupancy does not change, so confirm it via image subtraction:
+            # destination pixels change (opponent piece -> mover's piece)
+            elif self.board.is_capture(move):
+                dest_name = chess.square_name(move.to_square)
+                if self.vision.squareDifference(dest_name) < self.CAPTURE_DIFF_THRESHOLD:
+                    continue  # destination looks unchanged -> not this capture
+            # regular move: 
+            # destination goes from empty to occupied
+            else:
+                move_squares.add(move.to_square)
+
+            # castling:
+            # rook moves between two squares that both flip
             if self.board.is_castling(move):
                 rank = chess.square_rank(move.from_square)
                 if move.to_square > move.from_square: # kingside
@@ -233,23 +287,34 @@ class ChessBoard:
                     rook_to   = chess.square(3, rank) # rook destination
                 move_squares.add(rook_from)
                 move_squares.add(rook_to)
-            # ! What to do for promotion?
+            
+            # ! What to do for promotion? -- user input
             if move_squares <= observed_squares:
                 possible_moves.append(move)
         
         print('possible moves', possible_moves)
 
-        if possible_moves:
-            for move in possible_moves:
-                if move.promotion == chess.QUEEN: # if pawn promotion, default to queen
-                    move_to_play = move
-                    break
-            else:
-                move_to_play = possible_moves[0] # otherwise, pick first legal match
+        if not possible_moves:
+            return None
 
-            return move_to_play
-        
-        return None
+        # Pawn promotion produces four legal moves sharing one from/to (=Q/=R/=B/=N)
+        # Vision can't tell which piece it became
+        # Defer to a human keypress instead of committing anything now
+        if self.__isPromotionGroup(possible_moves):
+            self.promotion_candidates = possible_moves
+            return None
+
+        return possible_moves[0] # first legal match
+
+    # True when matched moves are ambiguous
+    # 2+ moves that all promote and share the same from/to (only the promotion piece differs).
+    def __isPromotionGroup(self, moves):
+        if len(moves) < 2:
+            return False
+        if any(m.promotion is None for m in moves):
+            return False
+        first = moves[0]
+        return all(m.from_square == first.from_square and m.to_square == first.to_square for m in moves)
     
     # Retrieve occupancy from chess engine
     def getEngineOccupancy(self):
@@ -266,7 +331,7 @@ class ChessBoard:
                     occ[row][col] = True
 
         return occ
-    
+
     # Detect changes
     def getChangedSquares(self, stabilized_observed):
         engine_occ = self.getEngineOccupancy()
@@ -276,7 +341,7 @@ class ChessBoard:
         for row in range(8):
             for col in range(8):
                 if stabilized_observed[row][col] != engine_occ[row][col]:
-                    changed.append(chess.square(col, row))
+                    changed.append(chess.parse_square(self.vision.squares[row][col].name))
 
         return changed
     

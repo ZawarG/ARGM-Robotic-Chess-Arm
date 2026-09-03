@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 from src.logic.chess_board import ChessBoard
-import src.vision.utils as utils
+import src.vision.geometry as geometry
 import src.ui.calibration as calibration
 import src.ui.debugger as debugger
 
@@ -23,12 +23,13 @@ def main():
         ret, img = cam.read()
         if not ret: continue
 
-        board_detected, board_coord, warped_img = runCalibration(img, model)
+        board_detected, board_coord, warped_img, M = runCalibration(img, model)
 
     # Game phase
-    game = ChessBoard(board_coord, player_is_black)
-    game.vision.initializeBoard(warped_img)
-    
+    # Live play: robot_enabled defaults to True, so engine/arm plays opponent
+    # Passing warped_img calibrates occupancy up front (initializeBoard runs in __init__).
+    game = ChessBoard(board_coord, M, warped_img)
+
     while True:
         ret, img = cam.read()
         if not ret: break
@@ -46,12 +47,12 @@ def main():
     cam.release()
 
 def runCalibration(img, model):
-    img_small = utils.makeImageSmall(img) # Reduce size of image
-    img_cropped, (offset_x, offset_y) = utils.cropImageToBoard(img_small, model) # Detect/crop to board using YOLO
+    img_small = geometry.makeImageSmall(img) # Reduce size of image
+    img_cropped, (offset_x, offset_y) = geometry.cropImageToBoard(img_small, model) # Detect/crop to board using YOLO
 
     # Attempt automatic detection and extract corners
-    img_mask = utils.preprocessImage(img_cropped)
-    board_detected, corners = utils.detectSquares(img_mask)
+    img_mask = geometry.preprocessImage(img_cropped)
+    board_detected, corners = geometry.detectSquares(img_mask)
 
     # Map corners from the tight YOLO crop back into full img_small space.
     # extractOuterCorners can land outside the tight crop
@@ -64,100 +65,101 @@ def runCalibration(img, model):
         print("Automatic detection failed. Opening manual calibration.")
         board_detected, corners = calibration.adjustImageManually(img_small)
 
-    M, coords, warped_img = utils.runInitialCalibration(img_small, corners)
+    M, coords, warped_img = geometry.runInitialCalibration(img_small, corners)
 
     return board_detected, coords, warped_img, M
 
-def testCode(model) :
-    USE_IMAGE = 0
+def testCode(model):
+    video_path = "Chessboard Image Detection/data/videos/starts_occupied.mov"
+    cap = cv2.VideoCapture(video_path)
 
-    if USE_IMAGE:
-        image_path = "Chessboard Image Detection/data/input/IMG_0302.jpg"
-        img = cv2.imread(image_path)
+    # Start video at this timestamp
+    START_TIME_SECONDS = 30
+    cap.set(cv2.CAP_PROP_POS_MSEC, START_TIME_SECONDS * 1000)
 
-        playerIsBlack = False # Player is black
+    # Grab the first frame for board localization
+    ret, img = cap.read()
+    if not ret:
+        print("Failed to read video")
+        return
 
-        # Detect board
-        board_detected, board_coord, warped_img, M = runCalibration(img, model)
+    # Localize the board on the EMPTY board (corner/grid detection needs it empty)
+    board_detected, board_coord, warped_img, M = runCalibration(img, model)
 
-        if not board_detected:
-            return
-        
-        # Initialize game (single image: calibrate immediately from this frame)
-        game = ChessBoard(board_coord, playerIsBlack, M, warped_img=warped_img)
+    if board_detected is None:
+        return
 
-        debugger.displaySquares(game.vision)
+    # Build the game, but don't calibrate occupancy yet
+    # The light/dark reference profiles need the populated board, which the user sets up next
+    # robot_enabled=False
+    # This is the recorded-video test path, so both sides are tracked visually instead of the engine/arm playing the opponent
+    game = ChessBoard(board_coord, M, robot_enabled=False)
 
-    else:
-        video_path = "Chessboard Image Detection/data/videos/starts_empty.mov"
-        cap = cv2.VideoCapture(video_path)
+    paused = False
 
-        # Grab the first frame for board localization
-        ret, img = cap.read()
-        if not ret:
-            print("Failed to read video")
-            return
-
-        # Ask the user for their colour
-        # player_colour = calibration.askPlayerColour()
-        playerIsBlack = True # Player is black
-
-        # Localize the board on the EMPTY board (corner/grid detection needs it empty)
-        board_detected, board_coord, warped_img, M = runCalibration(img, model)
-
-        if board_detected is None:
-            return
-
-        # Build the game, but DON'T calibrate occupancy yet
-        # The light/dark reference profiles need the populated board, which the user sets up next
-        game = ChessBoard(board_coord, playerIsBlack, M)
-
-        paused = False
-
-        while True:
-            # If not paused, capture a new frame
-            if not paused:
-                ret, img = cap.read()
-                if not ret:
-                    break
-
-            if not game.started:
-                # Setup phase: 
-                # Show the live warped feed so the user can place the pieces
-                # Press 'S' to calibrate from this frame and start.
-                warped = utils.warpFrame(utils.makeImageSmall(img), M)
-                live_display = warped.copy()
-                cv2.putText(live_display, "Set up pieces, then press S to start",
-                            (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-            else:
-                # Game phase: update engine, then draw the occupancy overlay
-                if not paused:
-                    winner = game.update(img)
-                    if winner is not None:
-                        print("game over")
-
-                live_display = debugger.drawOccupancyOverlay(game.vision)
-
-            # Show live video window
-            cv2.imshow("Live Chess Matrix Tracker", live_display)
-
-            # Intercept keyboard keys
-            key = cv2.waitKey(20) & 0xFF
-
-            if key == ord('s') and not game.started:  # 'S' calibrates + starts the game
-                game.beginGame(img)  # uses the CURRENT frame (pieces in place)
-                print("Game started")
-
-            elif key == ord(' '):  # SPACEBAR toggles pause/play
-                paused = not paused
-                print("Status:", "PAUSED" if paused else "PLAYING")
-
-            elif key == ord('q'):  # 'Q' quits the stream
+    while True:
+        # If not paused, capture a new frame
+        if not paused:
+            ret, img = cap.read()
+            if not ret:
                 break
 
-        game.close()
-        cap.release()
-        cv2.destroyAllWindows()
+        if not game.started:
+            # Setup phase: show the live warped feed so the user can place the
+            # pieces. Press 'S' to calibrate from this frame and start.
+            live_display = debugger.drawSetupOverlay(img, M)
+        else:
+            # Game phase: update engine, then draw the occupancy overlay
+            if not paused:
+                winner = game.update(img)
+                if winner is not None:
+                    print("game over")
+
+            live_display = debugger.drawOccupancyOverlay(game.vision)
+
+            # Promotion prompt: vision saw a pawn promote but can't tell into what
+            if game.isAwaitingPromotion():
+                live_display = debugger.drawPromotionOverlay(live_display, game)
+
+        # Show live video window
+        cv2.imshow("Live Chess Matrix Tracker", live_display)
+
+        # Intercept keyboard keys
+        key = cv2.waitKey(1) & 0xFF
+        paused, quit_requested = handleKeyInput(key, game, img, paused)
+        if quit_requested:
+            break
+
+    game.close()
+    cap.release()
+    cv2.destroyAllWindows()
+
+# Handles a single keypress for the testCode loop.
+# Returns the (possibly updated) paused flag and whether the user asked to quit.
+def handleKeyInput(key, game, img, paused):
+    # While awaiting a promotion pick, q/r/b/n select the piece and Enter confirms
+    # the choice. These are gated here so 'q' means Queen, not Quit.
+    if game.started and game.isAwaitingPromotion():
+        if key in (ord('q'), ord('r'), ord('b'), ord('n')):
+            game.selectPromotion(chr(key))
+        elif key in (13, 10):  # Enter (CR / LF)
+            game.confirmPromotion()
+
+    elif key == ord('s') and not game.started:  # 'S' calibrates + starts the game
+        game.beginGame(img)  # uses the CURRENT frame (pieces in place)
+        print("Game started")
+
+    elif key == ord(' '):  # SPACEBAR toggles pause/play
+        paused = not paused
+        print("Status:", "PAUSED" if paused else "PLAYING")
+
+    elif key == ord('d') and game.started:  # 'D' pops the per-square diff heatmap
+        debugger.displayDifferences(game.vision, ChessBoard.CAPTURE_DIFF_THRESHOLD)
+
+    elif key == ord('q'):  # 'Q' quits the stream
+        return paused, True
+
+    return paused, False
 
 if __name__ == "__main__":
     USE_CAMERA = 0

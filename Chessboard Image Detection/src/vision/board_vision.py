@@ -1,5 +1,6 @@
 import numpy as np
-import src.vision.utils as utils
+import src.vision.geometry as geometry
+import src.vision.occupancy as occupancy
 from src.vision.chess_square import ChessSquare
 
 #  (\(\
@@ -9,15 +10,17 @@ from src.vision.chess_square import ChessSquare
 # It contains the images for each chess square and features related to them.
 
 class BoardVision:
-    def __init__(self, coord, bot_is_white):
+    def __init__(self, coord):
         self.coord = coord # Visual positions of each square in board
         self.squares = [[None for _ in range(8)] for _ in range(8)]
         self.light_profile = None
         self.dark_profile = None
-        self.bot_is_white = bot_is_white
         self.occupancy_buffer = []
         self.M = None
         self.warped_img = None
+        self.bot_is_white = None
+        self.square_lookup = {}  # square name ("e4") -> ChessSquare
+        self.reference_hsv = None  # board brightness when the reference images were snapshotted
 
     def _getSquareImage(self, img, row, col):
         top_left = self.coord[row, col] # top left coordinate of square
@@ -27,19 +30,24 @@ class BoardVision:
             int(top_left[0]):int(bottom_right[0])
         ]
 
-        hsv = utils.adjustSquare(isolated_square)
+        hsv = occupancy.adjustSquare(isolated_square)
         return hsv
 
-    def initializeBoard(self, img, M, is_board_empty=False):
-        self.warped_img = img
-        self.M = M
-
+    def initializeBoard(self, img, M):
+        self.warped_img, self.M = img, M
         files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
         ranks = [8, 7, 6, 5, 4, 3, 2, 1]
 
-        light_squares = []
-        dark_squares = []
-        square_means = []
+        # Extract every square once -- for orientation and profiles
+        hsv_img = [[self._getSquareImage(img, r, c) for c in range(8)] for r in range(8)]
+
+        # Determine orientation
+        robot_square_hsv = np.mean([np.mean(hsv_img[r][c]) for r in (6, 7) for c in range(8)])
+        opponent_square_hsv = np.mean([np.mean(hsv_img[r][c]) for r in (0, 1) for c in range(8)])
+        self.bot_is_white = robot_square_hsv > opponent_square_hsv
+
+        # Build profiles
+        light_squares, dark_squares, square_means = [], [], []
 
         for row in range(8):
             for col in range(8):
@@ -47,27 +55,21 @@ class BoardVision:
                 file = files[col]
                 rank = ranks[row] if self.bot_is_white else ranks[7-row]
 
-                # Retrieve and store chess square
-                hsv_img = self._getSquareImage(img, row, col)
-                square_object = ChessSquare(hsv_img, row, col, file, rank)
+                # Store chess square object
+                square_object = ChessSquare(hsv_img[row][col], row, col, file, rank)
                 self.squares[row][col] = square_object
+                self.square_lookup[square_object.name] = square_object
 
-                square_means.append(np.mean(hsv_img, axis=(0, 1)))
+                # Calculate average hsv values
+                square_means.append(np.mean(hsv_img[row][col], axis=(0, 1)))
 
-                # Calculate base light/dark colour
-                if is_board_empty:
+                # Middle rows are empty -> boolean occupancy + learn empty light/dark colour
+                if row in (2, 3, 4, 5):
+                    square_object.setOccupancy(False)
                     if square_object.is_light_square:
-                        light_squares.append(hsv_img)
+                        light_squares.append(hsv_img[row][col])
                     else:
-                        dark_squares.append(hsv_img)
-                else:
-                    if row in [2, 3, 4, 5]:
-                        square_object.setOccupancy(False)
-
-                        if square_object.is_light_square:
-                            light_squares.append(hsv_img)
-                        else:
-                            dark_squares.append(hsv_img)
+                        dark_squares.append(hsv_img[row][col])
 
         # Convert lists to numpy arrays (prevents calculation error)
         light_squares = np.array(light_squares)
@@ -84,21 +86,47 @@ class BoardVision:
         self.dark_profile = {
             'avg_sq': np.mean(dark_squares, axis=0).astype(np.float32),
             'std_sq': np.maximum(np.std(dark_squares, axis=0), 1e-7),
-            'avg_hsv': np.median(square_means), 
+            'avg_hsv': np.median(square_means),
             'curr_hsv': np.median(square_means)
         }
 
-    # Warps a raw frame (same pipeline as updateFrame) and builds the light/dark
-    # reference profiles from it. Use this to calibrate from a live/populated frame.
-    def calibrate(self, raw_img, M, is_board_empty=False):
-        img_small = utils.makeImageSmall(raw_img)
-        warped = utils.warpFrame(img_small, M)
-        self.initializeBoard(warped, M, is_board_empty=is_board_empty)
+        # The reference images (set in each ChessSquare) correspond to this frame's lighting
+        self.reference_hsv = np.median(square_means)
+
+    # Freeze current square images as reference for future image subtraction
+    # Call once board is at a known-good state (after each confirmed move)
+    def snapshotReference(self):
+        for row in self.squares:
+            for square in row:
+                if square is not None:
+                    square.snapshotReference()
+        # Reference images now correspond to the current lighting
+        self.reference_hsv = self.light_profile['curr_hsv']
+
+    # Exposure drift between when the reference was taken and the current frame.
+    # Subtracted from the reference's Value channel so lighting change isn't read as motion.
+    def getLightingOffset(self):
+        if self.reference_hsv is None or self.light_profile is None:
+            return 0.0
+        return float(self.light_profile['curr_hsv'] - self.reference_hsv)
+
+    # HSV difference on a named square vs its reference image (exposure-compensated).
+    # Used to confirm a capture, which leaves occupancy unchanged at the destination.
+    def squareDifference(self, name):
+        square = self.square_lookup.get(name)
+        return square.difference(self.getLightingOffset()) if square is not None else 0.0
+
+    # Warps a raw frame (same pipeline as updateFrame) and builds the light/dark reference profiles from it. Use this to calibrate from a live/populated frame.
+    def calibrate(self, raw_img, M):
+        img_small = geometry.makeImageSmall(raw_img)
+        warped = geometry.warpFrame(img_small, M)
+        self.initializeBoard(warped, M)
+        return self.bot_is_white
 
     # Takes a raw unwarped video frame, crops and warps it, and extracts the squares
     def updateFrame(self, raw_img):
-        img_small = utils.makeImageSmall(raw_img)
-        img = utils.warpFrame(img_small, self.M)
+        img_small = geometry.makeImageSmall(raw_img)
+        img = geometry.warpFrame(img_small, self.M)
         self.warped_img = img
 
         square_means = []
