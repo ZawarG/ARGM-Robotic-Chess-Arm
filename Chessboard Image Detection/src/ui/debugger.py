@@ -114,45 +114,45 @@ def drawOccupancyOverlay(board_vision):
 
 # Display per-square image-subtraction diff for whole board.
 # Each cell shows current square (piece side by side with the reference is summarised by the diff map underneath) and diff heatmap, titled with scalar score
-def displayDifferences(vision, threshold=None):
-    v_offset = vision.getLightingOffset()
+# def displayDifferences(vision, threshold=None):
+#     v_offset = vision.getLightingOffset()
 
-    # Collect diff maps + scores so heatmaps can share one colour scale
-    diff_maps = [[None] * 8 for _ in range(8)]
-    scores = [[0.0] * 8 for _ in range(8)]
-    vmax = 1.0
-    for i in range(8):
-        for j in range(8):
-            square = vision.squares[i][j]
-            if square is None:
-                continue
-            dmap = square.differenceMap(v_offset)
-            diff_maps[i][j] = dmap
-            if dmap is not None:
-                scores[i][j] = float(np.mean(dmap))
-                vmax = max(vmax, float(dmap.max()))
+#     # Collect diff maps + scores so heatmaps can share one colour scale
+#     diff_maps = [[None] * 8 for _ in range(8)]
+#     scores = [[0.0] * 8 for _ in range(8)]
+#     vmax = 1.0
+#     for i in range(8):
+#         for j in range(8):
+#             square = vision.squares[i][j]
+#             if square is None:
+#                 continue
+#             dmap = square.differenceMap(v_offset)
+#             diff_maps[i][j] = dmap
+#             if dmap is not None:
+#                 scores[i][j] = float(np.mean(dmap))
+#                 vmax = max(vmax, float(dmap.max()))
 
-    fig, axes = plt.subplots(8, 8, figsize=(6, 6))
-    fig.suptitle(f"Per-square HSV diff vs reference (offset={v_offset:.1f})", fontsize=11)
+#     fig, axes = plt.subplots(8, 8, figsize=(6, 6))
+#     fig.suptitle(f"Per-square HSV diff vs reference (offset={v_offset:.1f})", fontsize=11)
 
-    for i in range(8):
-        for j in range(8):
-            ax = axes[i, j]
-            ax.axis('off')
-            square = vision.squares[i][j]
-            dmap = diff_maps[i][j]
-            if square is None or dmap is None:
-                continue
+#     for i in range(8):
+#         for j in range(8):
+#             ax = axes[i, j]
+#             ax.axis('off')
+#             square = vision.squares[i][j]
+#             dmap = diff_maps[i][j]
+#             if square is None or dmap is None:
+#                 continue
 
-            ax.imshow(dmap, cmap='inferno', vmin=0, vmax=vmax)
+#             ax.imshow(dmap, cmap='inferno', vmin=0, vmax=vmax)
 
-            score = scores[i][j]
-            over = threshold is not None and score >= threshold
-            ax.set_title(f"{square.name} {score:.0f}", fontsize=8,
-                         color=('red' if over else 'black'))
+#             score = scores[i][j]
+#             over = threshold is not None and score >= threshold
+#             ax.set_title(f"{square.name} {score:.0f}", fontsize=8,
+#                          color=('red' if over else 'black'))
 
-    plt.tight_layout()
-    plt.show()
+#     plt.tight_layout()
+#     plt.show()
 
 
 # Display each square on matplotlib

@@ -3,6 +3,7 @@ from enum import Enum, auto
 from src.vision.board_vision import BoardVision
 from src.ui.visualize import ChessVisualizer
 from src.hardware.robot import RobotController
+from src.logic.move_decomposition import decompose
 import src.ui.debugger as debugger
 
 #  (\(\
@@ -78,7 +79,6 @@ class ChessBoard:
 
     # FSM state updater
     def update(self, img):
-        debugger.displayDifferences(self.vision)
         if img is not None:
             self.vision.updateFrame(img)
         
@@ -183,7 +183,10 @@ class ChessBoard:
         move = result.move
 
         print("Robot played:", move)
-        self.robot.movePiece(move.from_square, move.to_square)
+        # Decompose while self.board still holds pre-move position
+        # (move is pushed later, after animation, in __commitMove).
+        steps = decompose(self.board, move)
+        self.robot.executePlan(steps)
         
         self.last_move_by_human = False
         self.pending_push_move = move  # store the move to push after animation finishes
