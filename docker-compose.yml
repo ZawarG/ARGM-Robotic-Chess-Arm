@@ -1,0 +1,12 @@
+services:
+  ros2:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: argm-ros2:jazzy
+    container_name: ros2
+    volumes:
+      - .:/ws
+    working_dir: /ws
+    stdin_open: true
+    tty: true

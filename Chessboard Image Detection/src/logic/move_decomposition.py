@@ -6,9 +6,8 @@ import chess
 # Turns a single python-chess Move into the ordered list of physical
 # pick-and-place steps the arm must actually perform.
 #
-# A step is a (from, to) tuple. `from` and `to` are normally squares
-# (ints 0..63, a1=0 .. h8=63). A destination may instead be an off-board
-# bin string, and a source may be a supply string:
+# A step is a (from, to) tuple. `from` and `to` are normally squares (ints 0..63, a1=0 .. h8=63)
+# A destination may instead be an off-board bin string, and a source may be a supply string:
 #
 #   normal:     [(e2, e4)]
 #   capture:    [(d5, BIN), (e4, d5)]          # remove victim FIRST
