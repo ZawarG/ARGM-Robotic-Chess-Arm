@@ -17,5 +17,6 @@ pyserial==3.5
 python-dateutil==2.9.0.post0
 requests==2.32.5
 six==1.17.0
+ultralytics==8.4.48
 stockfish==4.0.5
 urllib3==2.6.3
