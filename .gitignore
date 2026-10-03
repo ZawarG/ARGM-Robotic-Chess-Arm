@@ -216,3 +216,11 @@ __marimo__/
 
 # tests
 /Chessboard Image Detection/tests/
+
+# ROS 2 colcon build output
+/ros2_ws/build/
+/ros2_ws/install/
+/ros2_ws/log/
+
+
+.vscode/

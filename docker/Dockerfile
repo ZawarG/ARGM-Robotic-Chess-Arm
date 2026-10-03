@@ -5,6 +5,8 @@ FROM ros:jazzy
 ENV DEBIAN_FRONTEND=noninteractive
 # Ubuntu installs stockfish to /usr/games
 ENV PATH="/usr/games:${PATH}"
+# Writable settings dir for ultralytics (YOLO)
+ENV YOLO_CONFIG_DIR=/tmp/Ultralytics
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ros-jazzy-desktop \
