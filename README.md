@@ -14,6 +14,16 @@ An autonomous chess-playing robot that combines computer vision, state estimatio
 6. **Engine Query:** Stockfish analyzes the state and generates a response move
 7. **Execution:** The validated response move is transmitted to a custom robotic arm for physical execution
 
+## Repository Layout
+```
+core/        Python app: vision, game logic, UI, robot serial driver (run from repo root: python core/main.py)
+firmware/    Arduino firmware for the arm
+ros2_ws/     ROS 2 packages (argm_chess, argm_chess_interfaces)
+cad/         Mechanical CAD models
+docs/        Project notes
+docker/      Dockerfile for the ROS 2 Jazzy dev environment
+```
+
 ## Technologies & Concepts
 - **Python** (NumPy, OpenCV, Ultralytics YOLO)
 - **Arduino/C++**
