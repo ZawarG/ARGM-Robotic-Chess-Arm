@@ -2,8 +2,8 @@
 .venv
 **/__pycache__
 .DS_Store
-CAD Models
-Chessboard Image Detection/data
+cad
+core/data
 ros2_ws/build
 ros2_ws/install
 ros2_ws/log

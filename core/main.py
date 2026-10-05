@@ -12,7 +12,7 @@ import src.ui.controls as controls
 # This file runs essential functions used to detect the chess board, followed by the main game loop
 
 def main():
-    model = YOLO("Chessboard Image Detection/models/best.pt")
+    model = YOLO("core/models/best.pt")
     cam = cv2.VideoCapture(0)
 
     # Localization phase
@@ -61,7 +61,7 @@ def runCalibration(img, model):
     return board_detected, coords, warped_img, M
 
 def testCode(model):
-    video_path = "Chessboard Image Detection/data/videos/starts_occupied.mov"
+    video_path = "core/data/videos/starts_occupied.mov"
     cap = cv2.VideoCapture(video_path)
 
     # Grab the first frame for board localization
@@ -94,5 +94,5 @@ if __name__ == "__main__":
     if USE_CAMERA:
         main()
     else: 
-        model = YOLO("Chessboard Image Detection/models/best.pt")
+        model = YOLO("core/models/best.pt")
         testCode(model)

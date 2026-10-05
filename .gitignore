@@ -211,11 +211,11 @@ __marimo__/
 .DS_Store
 
 # image detection data
-/Chessboard Image Detection/data/input
-/Chessboard Image Detection/data/videos
+/core/data/input
+/core/data/videos
 
 # tests
-/Chessboard Image Detection/tests/
+/core/tests/
 
 # ROS 2 colcon build output
 /ros2_ws/build/
@@ -224,3 +224,4 @@ __marimo__/
 
 
 .vscode/
+/core/models/last.pt

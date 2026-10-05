@@ -8,5 +8,8 @@ services:
     volumes:
       - .:/ws
     working_dir: /ws
+    environment:
+      # Let the ROS nodes import the existing project code under src/
+      - PYTHONPATH=/ws/core
     stdin_open: true
     tty: true

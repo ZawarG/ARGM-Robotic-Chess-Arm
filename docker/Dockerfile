@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Project Python dependencies (Ubuntu 24.04 needs --break-system-packages for system pip)
-COPY ["Chessboard Image Detection/requirements.txt", "/tmp/requirements.txt"]
+COPY ["core/requirements.txt", "/tmp/requirements.txt"]
 RUN pip3 install --no-cache-dir --break-system-packages --ignore-installed -r /tmp/requirements.txt
 
 # Source ROS automatically in every shell
