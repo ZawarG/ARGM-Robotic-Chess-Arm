@@ -201,10 +201,10 @@ class ChessBoard:
 
         if outcome.winner == None:
             winner = "Draw"
-        elif outcome.winner == self.bot_is_white: # outcome.winner is true if it's 
-            winner =  "Player"
-        else:
+        elif outcome.winner == self.bot_is_white: # if winner is true and bot is white, then bot is winner. if winner is false and bot is black, then bot is winner
             winner =  "Robot"
+        else:
+            winner =  "Winner"
         
         if self.robot_enabled:
             self.robot.announceWinner(winner)
