@@ -21,7 +21,7 @@ Follow "Everyday commands" in [ros2-and-docker.md](ros2-and-docker.md).
 
 - [X] Firmware: `LED_BUILT_IN` → `LED_BUILTIN` (`firmware/arm_firmware.ino`)
 - [X] Winner label is inverted (`core/src/logic/chess_board.py` ~204-207)
-- [ ] `close()` called twice (`chess_board.py` ~200 and `core/main.py`)
+- [X] `close()` called twice (`chess_board.py` ~200 and `core/main.py`)
 - [ ] Hardcoded Stockfish path breaks in Docker (hint: `shutil.which`)
 - [ ] Non-ROS path sends square ints (`12`) instead of names (`e2`) (`core/src/hardware/robot.py` ~32)
 

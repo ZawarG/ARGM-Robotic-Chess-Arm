@@ -33,7 +33,6 @@ def main():
     # diff heatmap 'd', quit 'q')
     controls.runGameLoop(cam, game, M)
 
-    game.close()
     cam.release()
     cv2.destroyAllWindows()
 
@@ -84,7 +83,6 @@ def testCode(model):
     # Shared interactive loop (setup 'S', pause SPACE, promotion q/r/b/n + ENTER, diff heatmap 'd', quit 'q')
     controls.runGameLoop(cap, game, M)
 
-    game.close()
     cap.release()
     cv2.destroyAllWindows()
 
