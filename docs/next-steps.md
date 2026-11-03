@@ -22,19 +22,19 @@ Follow "Everyday commands" in [ros2-and-docker.md](ros2-and-docker.md).
 - [X] Firmware: `LED_BUILT_IN` → `LED_BUILTIN` (`firmware/arm_firmware.ino`)
 - [X] Winner label is inverted (`core/src/logic/chess_board.py` ~204-207)
 - [X] `close()` called twice (`chess_board.py` ~200 and `core/main.py`)
-- [ ] Hardcoded Stockfish path breaks in Docker (hint: `shutil.which`)
-- [ ] Non-ROS path sends square ints (`12`) instead of names (`e2`) (`core/src/hardware/robot.py` ~32)
+- [X] Hardcoded Stockfish path breaks in Docker (hint: `shutil.which`)
+- [X] Non-ROS path sends square ints (`12`) instead of names (`e2`) (`core/src/hardware/robot.py` ~32)
 
 ## Step 2 – First tests (1 evening)
 
 `pytest` tests for `decompose()` in `core/src/logic/move_decomposition.py`.
 
-- [ ] Normal move
-- [ ] Capture
-- [ ] Castling (both sides)
-- [ ] En passant
-- [ ] Promotion
-- [ ] **Done when:** `pytest` passes and you fixed or noted any bug the tests found
+- [X] Normal move
+- [X] Capture
+- [X] Castling (both sides)
+- [X] En passant
+- [X] Promotion
+- [X] **Done when:** `pytest` passes and you fixed or noted any bug the tests found
 
 ## Step 3 – Protocol spec (1 session, writing only)
 
