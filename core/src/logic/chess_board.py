@@ -5,6 +5,7 @@ from src.ui.visualize import ChessVisualizer
 from src.hardware.robot import RobotController
 from src.logic.move_decomposition import decompose
 import src.ui.debugger as debugger
+import shutil
 
 #  (\(\
 # ( -.-)
@@ -53,7 +54,7 @@ class ChessBoard:
             self.started = True
 
         self.board = chess.Board()
-        self.engine = chess.engine.SimpleEngine.popen_uci("/opt/homebrew/bin/stockfish")
+        self.engine = chess.engine.SimpleEngine.popen_uci(shutil.which("stockfish"))
         self.robot = RobotController() if robot_enabled else None
         self.visualizer = ChessVisualizer(self.board)
 
