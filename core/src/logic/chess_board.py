@@ -1,11 +1,11 @@
 import chess, chess.engine
 from enum import Enum, auto
+import shutil
 from src.vision.board_vision import BoardVision
 from src.ui.visualize import ChessVisualizer
 from src.hardware.robot import RobotController
 from src.logic.move_decomposition import decompose
 import src.ui.debugger as debugger
-import shutil
 
 #  (\(\
 # ( -.-)
@@ -34,6 +34,11 @@ class ChessBoard:
     }
 
     def __init__(self, coord, M, warped_img=None, robot_enabled=True):
+        path = shutil.which("stockfish")
+        if path is None:
+            print(f"Error: Stockfish path cannot be found")
+            raise FileNotFoundError
+
         # Initialize components
         self.vision = BoardVision(coord)
         self.M = M
@@ -54,7 +59,7 @@ class ChessBoard:
             self.started = True
 
         self.board = chess.Board()
-        self.engine = chess.engine.SimpleEngine.popen_uci(shutil.which("stockfish"))
+        self.engine = chess.engine.SimpleEngine.popen_uci(path)
         self.robot = RobotController() if robot_enabled else None
         self.visualizer = ChessVisualizer(self.board)
 

@@ -50,7 +50,19 @@ def decompose(board, move):
     if board.is_castling(move):
         steps.extend(_castling_rook_step(board, move))
 
-    return steps
+    # 4. Convert int to name — move.from_square gives an int. we use the actual name (with rank and file) for robot
+
+    converted_steps = []
+    for (f, t) in steps:
+        converted_steps.append((_name(f), _name(t)))
+
+    return converted_steps
+
+
+def _name(square):
+    if isinstance(square, int): 
+        return chess.square_name(square)
+    return square
 
 
 def _en_passant_victim_square(board, move):
