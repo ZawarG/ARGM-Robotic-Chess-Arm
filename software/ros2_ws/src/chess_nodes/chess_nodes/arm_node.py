@@ -2,7 +2,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 
-from argm_chess_interfaces.msg import ArmPlan
+from chess_interfaces.msg import ArmPlan
 
 #  (\(\
 # ( -.-)

@@ -215,9 +215,9 @@ __marimo__/
 /software/core/data/videos
 
 # ROS 2 colcon build output
-/software/core-ros/build/
-/software/core-ros/install/
-/software/core-ros/log/
+/software/ros2_ws/build/
+/software/ros2_ws/install/
+/software/ros2_ws/log/
 
 .vscode/
 /software/core/models/last.pt

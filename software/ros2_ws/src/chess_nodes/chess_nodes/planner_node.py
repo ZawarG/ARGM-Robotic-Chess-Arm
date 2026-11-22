@@ -2,7 +2,7 @@ import chess
 import rclpy
 from rclpy.node import Node
 
-from argm_chess_interfaces.msg import ArmPlan, ArmStep, EngineMove
+from chess_interfaces.msg import ArmPlan, ArmStep, EngineMove
 from src.logic.move_decomposition import decompose
 
 #  (\(\

@@ -4,6 +4,6 @@
 .DS_Store
 cad
 software/core/data
-software/core-ros/build
-software/core-ros/install
-software/core-ros/log
+software/ros2_ws/build
+software/ros2_ws/install
+software/ros2_ws/log

@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'argm_chess'
+package_name = 'chess_nodes'
 
 setup(
     name=package_name,
@@ -24,8 +24,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'planner_node = argm_chess.planner_node:main',
-            'arm_node = argm_chess.arm_node:main',
+            'planner_node = chess_nodes.planner_node:main',
+            'arm_node = chess_nodes.arm_node:main',
         ],
     },
 )
