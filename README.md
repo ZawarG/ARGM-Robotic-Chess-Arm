@@ -16,12 +16,12 @@ An autonomous chess-playing robot that combines computer vision, state estimatio
 
 ## Repository Layout
 ```
-core/        Python app: vision, game logic, UI, robot serial driver (run from repo root: python core/main.py)
-firmware/    Arduino firmware for the arm
-core-ros/     ROS 2 packages (argm_chess, argm_chess_interfaces)
-cad/         Mechanical CAD models
-docs/        Project notes
-docker/      Dockerfile for the ROS 2 Jazzy dev environment
+software/core/      Python app: vision, game logic, UI, robot serial driver (run from repo root: python software/core/main.py)
+software/core-ros/  ROS 2 packages (argm_chess, argm_chess_interfaces)
+firmware/           Arduino firmware for the arm
+cad/                Mechanical CAD models
+docs/               Project notes
+docker/             Dockerfile + docker-compose.yml for the ROS 2 Jazzy dev environment (docker compose -f docker/docker-compose.yml up)
 ```
 
 ## Technologies & Concepts

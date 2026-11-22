@@ -6,9 +6,9 @@ and the move itself, it returns the ordered list of physical (from, to) pick-and
 steps the arm must perform. Squares are returned as names ("e2"); off-board endpoints
 are strings (BIN, SUPPLY[...]). This checks all five move kinds.
 
-Run it from the "core" directory with the repo venv:
+Run it from the "software/core" directory with the repo venv:
 
-    ../.venv/bin/python -m pytest tests/test_move_decomposition.py -v
+    ../../../.venv/bin/python -m pytest tests/test_move_decomposition.py -v
 """
 import chess
 import pytest

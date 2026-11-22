@@ -6,9 +6,9 @@ two collaborators the promotion path touches: vision.squareDifference (capture c
 and visualizer.start_animation (animation kickoff). Then it drives the exact sequence
 main.py's key handler would: detectMove -> PENDING_PROMOTION -> selectPromotion -> confirmPromotion.
 
-Run it from the "Chessboard Image Detection" directory with the repo venv:
+Run it from the "software/core" directory with the repo venv:
 
-    ../.venv/bin/python tests/test_promotion.py
+    ../../../.venv/bin/python tests/test_promotion.py
 """
 import sys, os
 

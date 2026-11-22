@@ -16,7 +16,7 @@ setup(
     maintainer='Aasees',
     maintainer_email='129808072+aaseesb@users.noreply.github.com',
     description='ROS 2 nodes for the ARGM robotic chess arm',
-    license='MIT',
+    license='GPL-3.0-only',
     extras_require={
         'test': [
             'pytest',

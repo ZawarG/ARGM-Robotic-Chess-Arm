@@ -1,3 +1,4 @@
+from pathlib import Path
 import cv2
 import numpy as np
 from ultralytics import YOLO
@@ -6,13 +7,17 @@ import src.vision.geometry as geometry
 import src.ui.calibration as calibration
 import src.ui.controls as controls
 
+CORE_DIR = Path(__file__).resolve().parent
+MODEL_PATH = str(CORE_DIR / "models" / "best.pt")
+VIDEO_PATH = str(CORE_DIR / "data" / "videos" / "starts_occupied.mov")
+
 #  (\(\
 # ( -.-)
 # o_(")(")
 # This file runs essential functions used to detect the chess board, followed by the main game loop
 
 def main():
-    model = YOLO("core/models/best.pt")
+    model = YOLO(MODEL_PATH)
     cam = cv2.VideoCapture(0)
 
     # Localization phase
@@ -60,7 +65,7 @@ def runCalibration(img, model):
     return board_detected, coords, warped_img, M
 
 def testCode(model):
-    video_path = "core/data/videos/starts_occupied.mov"
+    video_path = VIDEO_PATH
     cap = cv2.VideoCapture(video_path)
 
     # Grab the first frame for board localization
@@ -92,5 +97,5 @@ if __name__ == "__main__":
     if USE_CAMERA:
         main()
     else: 
-        model = YOLO("core/models/best.pt")
+        model = YOLO(MODEL_PATH)
         testCode(model)

@@ -1,15 +1,15 @@
 services:
   ros2:
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile
     image: argm-ros2:jazzy
     container_name: ros2
     volumes:
-      - .:/ws
+      - ..:/ws
     working_dir: /ws
     environment:
       # Let the ROS nodes import the existing project code under src/
-      - PYTHONPATH=/ws/core
+      - PYTHONPATH=/ws/software/core
     stdin_open: true
     tty: true

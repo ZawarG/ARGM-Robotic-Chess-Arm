@@ -211,16 +211,16 @@ __marimo__/
 .DS_Store
 
 # image detection data
-/core/data/input
-/core/data/videos
+/software/core/data/input
+/software/core/data/videos
 
 # ROS 2 colcon build output
-/core-ros/build/
-/core-ros/install/
-/core-ros/log/
+/software/core-ros/build/
+/software/core-ros/install/
+/software/core-ros/log/
 
 .vscode/
-/core/models/last.pt
+/software/core/models/last.pt
 
 # planning
 /docs/plans

@@ -3,7 +3,7 @@
 **/__pycache__
 .DS_Store
 cad
-core/data
-ros2_ws/build
-ros2_ws/install
-ros2_ws/log
+software/core/data
+software/core-ros/build
+software/core-ros/install
+software/core-ros/log
