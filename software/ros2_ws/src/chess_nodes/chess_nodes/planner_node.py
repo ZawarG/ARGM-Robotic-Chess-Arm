@@ -5,13 +5,9 @@ from rclpy.node import Node
 from chess_interfaces.msg import ArmPlan, ArmStep, EngineMove
 from src.logic.move_decomposition import decompose
 
-#  (\(\
-# ( -.-)
-# o_(")(")
 # Wraps move_decomposition.decompose() as a ROS node.
 # In: an engine move + the position it was chosen in.
 # Out: the ordered pick-and-place steps the arm must perform.
-
 
 def _locationName(location):
     """decompose() yields either a square int (0..63) or an off-board string."""
